@@ -1,0 +1,77 @@
+# ─── ZERO ONE - Apache Config ─────────────────────────────────────────────────
+# Place this file in the web root (public_html or dist/ after build).
+# Handles React SPA routing + HTTPS redirect + security headers.
+
+Options -Indexes
+Options -MultiViews
+
+# ── HTTPS Redirect ────────────────────────────────────────────────────────────
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Force HTTPS
+  RewriteCond %{HTTPS} off
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # ── React SPA: send all non-file/dir requests to index.html ─────────────────
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# ── Security Headers ──────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+  # Prevent clickjacking
+  Header always set X-Frame-Options "SAMEORIGIN"
+
+  # Prevent MIME sniffing
+  Header always set X-Content-Type-Options "nosniff"
+
+  # Enable XSS filter in older browsers
+  Header always set X-XSS-Protection "1; mode=block"
+
+  # Referrer policy
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # Remove server signature
+  Header unset Server
+  Header unset X-Powered-By
+</IfModule>
+
+# ── Compression ───────────────────────────────────────────────────────────────
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+  AddOutputFilterByType DEFLATE image/svg+xml text/xml text/plain
+</IfModule>
+
+# ── Browser Caching ───────────────────────────────────────────────────────────
+<IfModule mod_expires.c>
+  ExpiresActive On
+
+  # HTML - no cache (React router handles fresh state)
+  <FilesMatch "\.html$">
+    ExpiresDefault "access plus 0 seconds"
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+
+  # Static assets (JS/CSS/fonts have content hashes from CRA build)
+  <FilesMatch "\.(js|css|woff2?|ttf|eot|otf)$">
+    ExpiresDefault "access plus 1 year"
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # Images
+  <FilesMatch "\.(png|jpg|jpeg|gif|ico|svg|webp)$">
+    ExpiresDefault "access plus 3 months"
+  </FilesMatch>
+</IfModule>
+
+# ── API Proxy (only needed if frontend and backend share same Apache vhost) ────
+# Uncomment and adjust if your backend runs on port 5000 on the same server:
+#
+# <IfModule mod_proxy.c>
+#   ProxyPass /api http://127.0.0.1:5000/api
+#   ProxyPassReverse /api http://127.0.0.1:5000/api
+# </IfModule>
