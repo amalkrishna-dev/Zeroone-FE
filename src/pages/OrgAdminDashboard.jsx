@@ -1821,7 +1821,7 @@ export default function OrgAdminDashboard() {
                       placeholder={f.placeholder} className={INPUT_CLS} />
                   </div>
                 ))}
-                <p className="text-xs text-gray-400">Employee logs in with OTP on their phone number.</p>
+                <p className="text-xs text-gray-400">Employee signs in at the staff portal with their email or phone and this password.</p>
               </div>
 
               {/* Permissions */}

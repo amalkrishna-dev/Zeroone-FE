@@ -540,6 +540,18 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.14);
 }
 
+/* iOS Safari zooms the page in when a focused input has a font-size below
+   16px. Bump all text-entry controls to 16px on small screens so focusing
+   a field (login, signup, booking checkout, etc.) never triggers a zoom. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .input-base {
+    font-size: 16px;
+  }
+}
+
 /* ============================================================
    Pills, chips, badges
    ============================================================ */

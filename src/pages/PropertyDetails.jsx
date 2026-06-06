@@ -439,7 +439,48 @@ export default function PropertyDetails() {
               className="lg:hidden scroll-mt-24"
             >
               <span className="section-eyebrow">Choose a room</span>
-              <h2 className="font-display font-bold text-ink-900 mt-2 mb-5">Available rooms</h2>
+              <h2 className="font-display font-bold text-ink-900 mt-2 mb-4">Available rooms</h2>
+
+              {/* Mobile date picker (desktop has it in the sticky widget) */}
+              <div className="border border-ink-200 rounded-xl overflow-hidden mb-3 bg-white">
+                <div className="grid grid-cols-2 divide-x divide-ink-100">
+                  <label className="p-3 cursor-pointer active:bg-ink-50 transition-colors block">
+                    <span className="block text-3xs font-bold text-teal-600 uppercase tracking-widest mb-1">Check-in</span>
+                    <div className="flex items-center gap-2">
+                      <FaCalendarAlt className="text-teal-500 flex-shrink-0" size={11} />
+                      <input
+                        type="date" value={selectedDates.checkIn} min={today}
+                        onChange={e => setSelectedDates({ ...selectedDates, checkIn: e.target.value })}
+                        className="w-full min-w-0 text-sm font-bold text-ink-900 focus:outline-none bg-transparent num"
+                      />
+                    </div>
+                  </label>
+                  <label className="p-3 cursor-pointer active:bg-ink-50 transition-colors block">
+                    <span className="block text-3xs font-bold text-teal-600 uppercase tracking-widest mb-1">Check-out</span>
+                    <div className="flex items-center gap-2">
+                      <FaCalendarAlt className="text-teal-500 flex-shrink-0" size={11} />
+                      <input
+                        type="date" value={selectedDates.checkOut} min={selectedDates.checkIn || today}
+                        onChange={e => setSelectedDates({ ...selectedDates, checkOut: e.target.value })}
+                        className="w-full min-w-0 text-sm font-bold text-ink-900 focus:outline-none bg-transparent num"
+                      />
+                    </div>
+                  </label>
+                </div>
+              </div>
+              {selectedDates.checkIn && selectedDates.checkOut && (
+                <div className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 mb-4 text-xs">
+                  <span className="font-bold text-teal-700 num">
+                    {isSameDay ? 'Day use' : `${nights} night${nights !== 1 ? 's' : ''}`}
+                  </span>
+                  <span className="text-teal-700 font-medium num">
+                    {new Date(selectedDates.checkIn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    {' → '}
+                    {new Date(selectedDates.checkOut).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+              )}
+
               <RoomSection
                 inline
                 selectedDates={selectedDates} availableRooms={availableRooms}
@@ -1319,11 +1360,11 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
                   className="overflow-hidden"
                 >
                   <div className="surface-soft p-4 mb-3">
-                    <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                       {[['Name *', 'name'], ['Phone', 'phone'], ['Email', 'email'], ['Relationship', 'relationship']].map(([p, k]) => (
                         <input key={k} placeholder={p} value={newGuest[k]}
                           onChange={e => setNewGuest({ ...newGuest, [k]: e.target.value })}
-                          className="input-base text-sm py-2" />
+                          className="input-base py-2.5" />
                       ))}
                     </div>
                     <label className="flex items-center gap-2 text-xs text-ink-600 mb-3 cursor-pointer">

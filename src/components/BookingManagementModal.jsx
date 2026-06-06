@@ -4,6 +4,7 @@ import {
   FaTimes, FaIdCard, FaCloudUploadAlt, FaCheckCircle,
   FaExclamationCircle, FaFilePdf, FaSignOutAlt,
   FaKey, FaCheckDouble, FaPhone, FaClipboardList, FaSave,
+  FaSignInAlt, FaBed,
 } from 'react-icons/fa';
 import apiClient from '../api/client';
 
@@ -63,6 +64,13 @@ export default function BookingManagementModal({ bookingId, role, onClose, onChe
   // Guest Registration Card (reception check-in)
   const [reg, setReg] = useState({});
   const [savingReg, setSavingReg] = useState(false);
+
+  // Room allocation + check-in
+  const [availableRooms, setAvailableRooms] = useState([]);
+  const [selectedRoomId, setSelectedRoomId] = useState('');
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [keyCollected, setKeyCollected] = useState(false);
 
   const isGlobalAdmin = role === 'global_admin';
   const isAdmin = role === 'global_admin' || role === 'admin' || role === 'org_admin';
@@ -144,6 +152,42 @@ export default function BookingManagementModal({ bookingId, role, onClose, onChe
     }
   }
 
+  // Load assignable rooms once a confirmed, not-yet-checked-in booking
+  // is open so reception can allocate one from the available pool.
+  useEffect(() => {
+    if (!booking || booking.checked_in_at || booking.status !== 'confirmed') return;
+    let cancelled = false;
+    setLoadingRooms(true);
+    apiClient.get(`/org-admin/bookings/${bookingId}/available-rooms`)
+      .then(res => {
+        if (cancelled) return;
+        const rooms = res.data.data || [];
+        setAvailableRooms(rooms);
+        // Default to the room already on the booking if it's still free.
+        const current = rooms.find(r => r.id === booking.room_id);
+        setSelectedRoomId(current ? current.id : (rooms[0]?.id || ''));
+      })
+      .catch(() => { if (!cancelled) setAvailableRooms([]); })
+      .finally(() => { if (!cancelled) setLoadingRooms(false); });
+    return () => { cancelled = true; };
+  }, [booking, bookingId]);
+
+  async function performCheckIn() {
+    if (!selectedRoomId) { toast.error('Select a room to allocate'); return; }
+    setCheckingIn(true);
+    try {
+      const res = await apiClient.post(`/org-admin/bookings/${bookingId}/check-in`, {
+        room_id: selectedRoomId,
+      });
+      toast.success(res.data.message || 'Checked in');
+      await refresh();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Check-in failed');
+    } finally {
+      setCheckingIn(false);
+    }
+  }
+
   function openUpload(target) {
     setUploadFor(target);
     setUploadForm({ id_type: 'aadhaar', id_number: '' });
@@ -194,7 +238,10 @@ export default function BookingManagementModal({ bookingId, role, onClose, onChe
       const collected = feePreview?.fee
         ? window.confirm('Mark the late fee as already collected from the guest?')
         : true;
-      const res = await apiClient.post(`/checkout/${bookingId}`, { late_fee_collected: collected });
+      const res = await apiClient.post(`/checkout/${bookingId}`, {
+        late_fee_collected: collected,
+        key_collected: keyCollected,
+      });
       toast.success('Checkout complete');
       if (onCheckedOut) onCheckedOut(res.data?.data);
       await refresh();
@@ -434,6 +481,54 @@ export default function BookingManagementModal({ bookingId, role, onClose, onChe
               </div>
             </section>
 
+            {/* ── ROOM ALLOCATION / CHECK-IN ── */}
+            <section>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                <FaBed size={12} className="text-teal-600" /> Room allocation &amp; check-in
+              </p>
+              {booking?.checked_in_at ? (
+                <div className="border border-emerald-100 bg-emerald-50 rounded-xl p-4 text-sm">
+                  <p className="font-bold text-emerald-700 flex items-center gap-2">
+                    <FaCheckCircle size={12} /> Checked in
+                    {booking.room_number ? ` · Room ${booking.room_number}` : ''}
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-1">
+                    {new Date(booking.checked_in_at).toLocaleString()}
+                  </p>
+                </div>
+              ) : (
+                <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+                  <p className="text-xs text-gray-500">
+                    Assign an available room for {(booking?.check_in_date || '').slice(0, 10)} →
+                    {' '}{(booking?.check_out_date || '').slice(0, 10)} and mark the guest checked in.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <select
+                      value={selectedRoomId}
+                      onChange={e => setSelectedRoomId(e.target.value)}
+                      disabled={loadingRooms || availableRooms.length === 0}
+                      className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60"
+                    >
+                      {loadingRooms && <option>Loading rooms…</option>}
+                      {!loadingRooms && availableRooms.length === 0 && <option value="">No rooms available</option>}
+                      {availableRooms.map(r => (
+                        <option key={r.id} value={r.id}>
+                          Room {r.room_number}{r.room_type ? ` · ${r.room_type}` : ''}{r.floor ? ` · ${r.floor}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={performCheckIn}
+                      disabled={checkingIn || !selectedRoomId}
+                      className="inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 disabled:opacity-50"
+                    >
+                      <FaSignInAlt size={12} /> {checkingIn ? 'Checking in…' : 'Check in'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+
             {/* ── KYC SECTION ── */}
             <section>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">KYC Verification</p>
@@ -647,12 +742,24 @@ export default function BookingManagementModal({ bookingId, role, onClose, onChe
               {booking?.checked_out_at ? (
                 <p className="mt-3 text-sm font-semibold text-emerald-700">
                   ✓ Checked out at {new Date(booking.checked_out_at).toLocaleString()}
+                  {booking.key_collected ? ' · key collected' : ''}
                 </p>
               ) : (
-                <button onClick={performCheckout} disabled={checkingOut}
-                  className="mt-3 w-full inline-flex items-center justify-center gap-2 py-2.5 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 disabled:opacity-50">
-                  <FaSignOutAlt size={12} /> {checkingOut ? 'Checking out…' : 'Check out guest'}
-                </button>
+                <>
+                  <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={keyCollected}
+                      onChange={e => setKeyCollected(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
+                    <FaKey size={11} className="text-gray-400" /> Room key / card collected from guest
+                  </label>
+                  <button onClick={performCheckout} disabled={checkingOut}
+                    className="mt-3 w-full inline-flex items-center justify-center gap-2 py-2.5 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 disabled:opacity-50">
+                    <FaSignOutAlt size={12} /> {checkingOut ? 'Checking out…' : 'Check out guest'}
+                  </button>
+                  <p className="mt-2 text-[11px] text-gray-400">
+                    On checkout the room is handed to housekeeping and its freed nights are returned to the OTA channel manager.
+                  </p>
+                </>
               )}
             </section>
 

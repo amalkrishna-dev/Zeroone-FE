@@ -32,16 +32,33 @@ function PageLoader() {
   );
 }
 
+// The dashboard a given role lands on. Single source of truth so every
+// guard (protected routes, root redirect, and the login-page guard) agrees.
+function roleHome(user) {
+  if (user?.role === 'global_admin') return '/global-admin';
+  if (user?.role === 'org_admin' || user?.role === 'employee') return '/org-admin';
+  if (user?.role === 'admin') return '/admin/dashboard';
+  return '/dashboard';
+}
+
 function ProtectedRoute({ children, allowedRoles = null }) {
   const { user, isAuthenticated, isInitializing } = useAuthStore();
   if (isInitializing) return <PageLoader />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
-    if (user?.role === 'global_admin') return <Navigate to="/global-admin" replace />;
-    if (user?.role === 'org_admin' || user?.role === 'employee') return <Navigate to="/org-admin" replace />;
-    if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={roleHome(user)} replace />;
   }
+  return children;
+}
+
+// Login / staff-login pages. A logged-in user must never reach these -
+// not by URL, in-app link, or the browser Back button. The only way back
+// to a login screen is to sign out (or confirm the session-timeout modal),
+// which clears auth state and lets this guard fall through to the page.
+function PublicOnlyRoute({ children }) {
+  const { user, isAuthenticated, isInitializing } = useAuthStore();
+  if (isInitializing) return <PageLoader />;
+  if (isAuthenticated) return <Navigate to={roleHome(user)} replace />;
   return children;
 }
 
@@ -49,11 +66,7 @@ function RootRedirect() {
   const { user, isAuthenticated, isInitializing } = useAuthStore();
   if (isInitializing) return <PageLoader />;
   if (!isAuthenticated) return <Navigate to="/properties" replace />;
-  if (user?.role === 'global_admin') return <Navigate to="/global-admin" replace />;
-  if (user?.role === 'org_admin') return <Navigate to="/org-admin" replace />;
-  if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
-  if (user?.role === 'employee') return <Navigate to="/org-admin" replace />;
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to={roleHome(user)} replace />;
 }
 
 function App() {
@@ -82,9 +95,9 @@ function App() {
     <Router>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<Auth />} />
-          <Route path="/staff" element={<AdminAuth />} />
+          {/* Public routes - blocked once authenticated (sign out to return) */}
+          <Route path="/login" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
+          <Route path="/staff" element={<PublicOnlyRoute><AdminAuth /></PublicOnlyRoute>} />
           <Route path="/properties" element={<Dashboard publicMode />} />
           <Route path="/property/:propertyId" element={<PropertyDetails />} />
           <Route path="/property/:propertyId/room/:roomId" element={<RoomDetails />} />

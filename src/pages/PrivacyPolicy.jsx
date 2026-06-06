@@ -125,12 +125,12 @@ export default function PrivacyPolicy() {
           <p>We collect the following categories of personal data only to the extent necessary to provide our service:</p>
           <Bullets
             items={[
-              <><b>Account data</b> - Indian mobile number, full name, and (optionally) email address. A mobile number is required because we authenticate every login with a one-time password (OTP); we do not store passwords for guest accounts.</>,
+              <><b>Account data</b> - full name, Indian mobile number, and email address. Email is required so we can send booking confirmations, room-access details and password-reset codes. We authenticate logins with a password, stored only as a salted bcrypt hash - never in plain text.</>,
               <><b>Profile data</b> - date of birth, gender, address, nationality (collected at the time of your first booking; optional until then).</>,
               <><b>Aadhaar-linked KYC data</b> - see section&nbsp;3 below.</>,
               <><b>Booking and stay data</b> - check-in / check-out dates, room and property selected, special requests, co-guest details, payment method.</>,
               <><b>Payment data</b> - we use Razorpay as our payment processor. Card and UPI details are submitted directly to Razorpay and are <i>not</i> stored on our servers. We only retain transaction identifiers and amounts.</>,
-              <><b>Communication logs</b> - records of WhatsApp / SMS / email messages we send you (delivery status, timestamps, message channel).</>,
+              <><b>Communication logs</b> - records of email messages we send you (delivery status, timestamps).</>,
               <><b>Device and usage data</b> - IP address, browser/device user agent, and pages visited, for security and abuse-prevention purposes.</>,
             ]}
           />
@@ -188,7 +188,7 @@ export default function PrivacyPolicy() {
         <Section id="how-use" title="4. How we use your data">
           <Bullets
             items={[
-              'Create and authenticate your account (OTP login).',
+              'Create and authenticate your account (password login and email-based password recovery).',
               'Process bookings and payments, and send you booking confirmations, smart-lock PINs and check-in details.',
               'Verify your identity for stay regulations (see section 3).',
               'Provide customer support, including responding to refund and dispute requests.',
@@ -209,7 +209,7 @@ export default function PrivacyPolicy() {
               <><b>Property owners and authorised staff</b> who host your booking - they receive your name, contact details, booking dates, special requests, co-guest list and KYC status (verified / pending). They do <i>not</i> see your full Aadhaar number, Aadhaar image, or selfie.</>,
               <><b>KYC service providers</b> (such as HyperVerge for OCR and face match, or Setu / DigiLocker for Aadhaar-based verification) - they process Aadhaar data on our behalf under signed data-processing agreements.</>,
               <><b>Payment processors</b> (Razorpay) - to charge and refund you.</>,
-              <><b>Communication providers</b> (WhatsApp Business Service Provider, SMS gateway, transactional email provider) - to deliver booking-related messages.</>,
+              <><b>Communication providers</b> (transactional email provider) - to deliver account, booking-related and password-recovery messages.</>,
               <><b>Law enforcement and regulatory authorities</b> - when we are required to do so under a lawful written request, court order, or statutory obligation (e.g. FRRO Form-C for foreign nationals; guest register inspection).</>,
               <><b>Professional advisers</b> (auditors, lawyers) - under strict confidentiality, only as needed.</>,
             ]}
@@ -224,7 +224,7 @@ export default function PrivacyPolicy() {
               ['Aadhaar image (front/back)', '180 days after the related booking checkout, OR until your KYC profile is re-verified - whichever is earlier. The image itself is deleted from our object storage; only the verification status and the masked number remain.'],
               ['Live selfie used for face match', '90 days after the face-match decision; deleted automatically.'],
               ['Booking and payment records', '8 years from the date of the transaction, to comply with the Income Tax Act and the Companies Act audit-trail requirements.'],
-              ['Communication logs (WhatsApp / SMS / email)', '24 months from the date of the message.'],
+              ['Communication logs (email)', '24 months from the date of the message.'],
               ['Account profile (name, phone, email, address)', 'As long as your account is active. If you request deletion, we erase your profile within 30 days, subject to the booking and payment retention above.'],
               ['Device / IP logs', '90 days, used only for security and abuse investigation.'],
               ['Guest register (for properties)', 'Retained for the period required by the local state hospitality / police directive (typically 12 months), then deleted.'],

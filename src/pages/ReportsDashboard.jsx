@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import apiClient from '../api/client';
@@ -10,7 +10,22 @@ import {
 import {
   FaArrowLeft, FaChartBar, FaDownload, FaFileAlt, FaFilter,
   FaRupeeSign, FaHotel, FaUserCheck, FaExclamationCircle,
+  FaBalanceScale, FaReceipt, FaIdCard, FaSearch, FaPlus, FaTrash,
 } from 'react-icons/fa';
+
+const money = (v) => `₹${Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+const EXPENSE_CATEGORIES = [
+  'maintenance', 'salary', 'supplies', 'utilities',
+  'ota_payout', 'marketing', 'rent', 'other',
+];
+const PAYMENT_MODES = ['cash', 'card', 'upi', 'bank', 'other'];
+
+const EMPTY_EXPENSE = {
+  category: 'maintenance', amount: '', description: '',
+  paid_to: '', payment_mode: 'cash', reference_no: '',
+  expense_date: new Date().toISOString().slice(0, 10),
+};
 
 export default function ReportsDashboard() {
   const navigate = useNavigate();
@@ -24,6 +39,15 @@ export default function ReportsDashboard() {
   const [revenueData, setRevenueData] = useState(null);
   const [occupancyData, setOccupancyData] = useState(null);
   const [guestRegister, setGuestRegister] = useState([]);
+  const [financeSummary, setFinanceSummary] = useState(null);
+  const [financeBookings, setFinanceBookings] = useState([]);
+  const [financeSearch, setFinanceSearch] = useState('');
+  const [expenses, setExpenses] = useState([]);
+  const [expenseTotal, setExpenseTotal] = useState(0);
+  const [expenseSearch, setExpenseSearch] = useState('');
+  const [expenseForm, setExpenseForm] = useState(EMPTY_EXPENSE);
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [grcDate, setGrcDate] = useState(today);
   const [loading, setLoading] = useState(false);
   const [activeReport, setActiveReport] = useState('revenue');
 
@@ -31,33 +55,103 @@ export default function ReportsDashboard() {
     apiClient.get('/properties').then(res => setProperties(res.data.data || [])).catch(() => {});
   }, []);
 
+  const params = useCallback(
+    () => `property_id=${selectedProperty}&from_date=${fromDate}&to_date=${toDate}`,
+    [selectedProperty, fromDate, toDate],
+  );
+
+  const loadFinanceBookings = useCallback(async (search = '') => {
+    try {
+      const res = await apiClient.get(`/finance/bookings?${params()}&search=${encodeURIComponent(search)}`);
+      setFinanceBookings(res.data.data || []);
+    } catch { /* finance perms may be absent */ }
+  }, [params]);
+
+  const loadExpenses = useCallback(async (search = '') => {
+    try {
+      const res = await apiClient.get(`/finance/expenses?${params()}&search=${encodeURIComponent(search)}`);
+      setExpenses(res.data.data || []);
+      setExpenseTotal(res.data.total_amount || 0);
+    } catch { /* finance perms may be absent */ }
+  }, [params]);
+
   async function fetchReports() {
     if (!selectedProperty) { toast.error('Please select a property'); return; }
     setLoading(true);
     try {
-      const params = `property_id=${selectedProperty}&from_date=${fromDate}&to_date=${toDate}`;
+      const p = params();
       const [revRes, occRes, regRes] = await Promise.all([
-        apiClient.get(`/reports/revenue?${params}`),
-        apiClient.get(`/reports/occupancy?${params}`),
-        apiClient.get(`/reports/guest-register?${params}`),
+        apiClient.get(`/reports/revenue?${p}`),
+        apiClient.get(`/reports/occupancy?${p}`),
+        apiClient.get(`/reports/guest-register?${p}`),
       ]);
       setRevenueData(revRes.data.data);
       setOccupancyData(occRes.data.data);
       setGuestRegister(regRes.data.data || []);
+      // Finance + expenses are best-effort (require finance_view).
+      apiClient.get(`/finance/summary?${p}`).then(r => setFinanceSummary(r.data.data)).catch(() => setFinanceSummary(null));
+      loadFinanceBookings('');
+      loadExpenses('');
     } catch { toast.error('Failed to fetch reports'); }
     finally { setLoading(false); }
   }
 
+  async function downloadBlob(url, filename) {
+    const res = await apiClient.get(url, { responseType: 'blob' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(new Blob([res.data]));
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   async function exportCSV() {
+    try { await downloadBlob(`/reports/bookings-export?${params()}`, `bookings_${fromDate}_${toDate}.csv`); }
+    catch { toast.error('Export failed'); }
+  }
+
+  async function exportExpenses() {
+    try { await downloadBlob(`/finance/expenses/export?${params()}`, `expenses_${fromDate}_${toDate}.csv`); }
+    catch { toast.error('Export failed'); }
+  }
+
+  async function downloadGRC() {
+    if (!selectedProperty) { toast.error('Select a property first'); return; }
     try {
-      const params = `property_id=${selectedProperty}&from_date=${fromDate}&to_date=${toDate}`;
-      const res = await apiClient.get(`/reports/bookings-export?${params}`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bookings_${fromDate}_${toDate}.csv`;
-      a.click();
-    } catch { toast.error('Export failed'); }
+      await downloadBlob(`/reports/grc-daily?property_id=${selectedProperty}&date=${grcDate}`,
+        `grc_${grcDate}.pdf`);
+      toast.success('GRC report downloaded');
+    } catch { toast.error('Failed to download GRC report'); }
+  }
+
+  async function addExpense(e) {
+    e.preventDefault();
+    if (!expenseForm.amount || Number(expenseForm.amount) < 0) { toast.error('Enter a valid amount'); return; }
+    setSavingExpense(true);
+    try {
+      await apiClient.post('/finance/expenses', {
+        ...expenseForm,
+        amount: Number(expenseForm.amount),
+        property_id: selectedProperty || null,
+      });
+      toast.success('Expense recorded');
+      setExpenseForm({ ...EMPTY_EXPENSE });
+      await loadExpenses(expenseSearch);
+      apiClient.get(`/finance/summary?${params()}`).then(r => setFinanceSummary(r.data.data)).catch(() => {});
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to record expense');
+    } finally { setSavingExpense(false); }
+  }
+
+  async function deleteExpense(id) {
+    if (!window.confirm('Delete this expense?')) return;
+    try {
+      await apiClient.delete(`/finance/expenses/${id}`);
+      toast.success('Expense deleted');
+      await loadExpenses(expenseSearch);
+      apiClient.get(`/finance/summary?${params()}`).then(r => setFinanceSummary(r.data.data)).catch(() => {});
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete'); }
   }
 
   async function runPaymentTimeoutCheck() {
@@ -69,8 +163,11 @@ export default function ReportsDashboard() {
 
   const REPORT_TABS = [
     { id: 'revenue',   label: 'Revenue',        icon: FaRupeeSign },
+    { id: 'finance',   label: 'Finance',        icon: FaBalanceScale },
+    { id: 'expenses',  label: 'Expenses',       icon: FaReceipt },
     { id: 'occupancy', label: 'Occupancy',      icon: FaHotel },
     { id: 'register',  label: 'Guest register', icon: FaUserCheck },
+    { id: 'grc',       label: 'GRC report',     icon: FaIdCard },
   ];
 
   return (
@@ -94,7 +191,7 @@ export default function ReportsDashboard() {
               </div>
               <div className="min-w-0">
                 <span className="section-eyebrow">Reports</span>
-                <p className="font-display font-bold text-ink-900 text-base sm:text-lg truncate">Analytics & exports</p>
+                <p className="font-display font-bold text-ink-900 text-base sm:text-lg truncate">Analytics, finance & exports</p>
               </div>
             </div>
           </div>
@@ -153,7 +250,7 @@ export default function ReportsDashboard() {
                 {loading ? 'Loading…' : 'Generate'}
               </motion.button>
               {revenueData && (
-                <button onClick={exportCSV} className="btn btn-outline" title="Export CSV">
+                <button onClick={exportCSV} className="btn btn-outline" title="Export bookings CSV">
                   <FaDownload size={11} />
                 </button>
               )}
@@ -226,10 +323,10 @@ export default function ReportsDashboard() {
                 >
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                      { label: 'Total revenue', value: `₹${revenueData.total_revenue?.toLocaleString()}`, color: 'teal' },
-                      { label: 'Confirmed bookings', value: revenueData.confirmed_bookings, color: 'sky' },
-                      { label: 'Avg booking value', value: `₹${revenueData.average_booking_value?.toLocaleString()}`, color: 'sunset' },
-                      { label: 'Discount given', value: `₹${revenueData.total_discount_given?.toLocaleString()}`, color: 'amber' },
+                      { label: 'Total revenue', value: money(revenueData.total_revenue) },
+                      { label: 'Confirmed bookings', value: revenueData.confirmed_bookings },
+                      { label: 'Avg booking value', value: money(revenueData.average_booking_value) },
+                      { label: 'Discount given', value: money(revenueData.total_discount_given) },
                     ].map((card, i) => (
                       <motion.div
                         key={card.label}
@@ -251,7 +348,7 @@ export default function ReportsDashboard() {
                         <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
                         <Tooltip
-                          formatter={v => `₹${v.toLocaleString()}`}
+                          formatter={v => money(v)}
                           contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 12, boxShadow: '0 8px 24px -8px rgba(15,23,42,0.12)' }}
                         />
                         <Bar dataKey="revenue" fill="url(#revGrad)" radius={[8, 8, 0, 0]} />
@@ -263,6 +360,208 @@ export default function ReportsDashboard() {
                         </defs>
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Finance - 3-way split + balance */}
+              {activeReport === 'finance' && (
+                <motion.div
+                  key="finance"
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }}
+                  className="space-y-4"
+                >
+                  {!financeSummary ? (
+                    <div className="surface p-8 text-center text-ink-400 text-sm">
+                      Finance data unavailable — you may not have finance access for this property.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        {[
+                          { label: 'Total to collect', value: money(financeSummary.total_to_collect) },
+                          { label: 'Net received', value: money(financeSummary.net_received) },
+                          { label: 'OTA commission', value: money(financeSummary.ota_commission) },
+                          { label: 'GST', value: money(financeSummary.gst) },
+                          { label: 'Expenses', value: money(financeSummary.total_expenses) },
+                          { label: 'Balance', value: money(financeSummary.balance), accent: true },
+                        ].map((card, i) => (
+                          <motion.div
+                            key={card.label}
+                            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.04, duration: 0.3 }}
+                            className="stat-card"
+                            style={card.accent ? { background: 'linear-gradient(135deg,#ecfeff,#f0f9ff)', borderColor: '#cffafe' } : undefined}
+                          >
+                            <p className="text-3xs text-ink-500 font-bold uppercase tracking-widest mb-2">{card.label}</p>
+                            <p className="stat-number" style={card.accent ? { color: '#0891b2' } : undefined}>{card.value}</p>
+                          </motion.div>
+                        ))}
+                      </div>
+
+                      <div className="surface overflow-hidden">
+                        <div className="px-5 py-4 border-b border-ink-100 flex items-center justify-between gap-2 flex-wrap">
+                          <h3 className="font-display font-bold text-ink-900 text-base">
+                            Per-booking split
+                            <span className="text-ink-500 font-medium ml-2 num">({financeBookings.length})</span>
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            <div className="relative">
+                              <FaSearch size={10} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+                              <input
+                                value={financeSearch}
+                                onChange={e => setFinanceSearch(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && loadFinanceBookings(financeSearch)}
+                                placeholder="Search guest, room, OTA…"
+                                className="input-base pl-8 py-1.5 text-sm w-56"
+                              />
+                            </div>
+                            <button onClick={() => loadFinanceBookings(financeSearch)} className="btn btn-outline py-1.5">Search</button>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-3xs uppercase tracking-widest text-ink-500 border-b border-ink-100">
+                                {['Guest', 'Room', 'Source', 'Check-in', 'Total', 'Commission', 'GST', 'Net'].map(h => (
+                                  <th key={h} className="px-4 py-2.5 font-bold whitespace-nowrap">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-ink-100">
+                              {financeBookings.map(b => (
+                                <tr key={b.booking_id} className="hover:bg-ink-50">
+                                  <td className="px-4 py-3">
+                                    <p className="font-semibold text-ink-900">{b.guest_name || '—'}</p>
+                                    <p className="text-2xs text-ink-400">{b.property_name}</p>
+                                  </td>
+                                  <td className="px-4 py-3 num">{b.room_number || '—'}</td>
+                                  <td className="px-4 py-3">
+                                    <span className={`pill ${b.source === 'OTA' ? 'pill-amber' : 'pill-success'}`}>
+                                      {b.source === 'OTA' ? (b.ota_source || 'OTA') : 'Direct'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 num text-ink-500">{b.check_in}</td>
+                                  <td className="px-4 py-3 num font-bold text-ink-900">{money(b.total_to_collect)}</td>
+                                  <td className="px-4 py-3 num text-amber-600">{money(b.ota_commission)}</td>
+                                  <td className="px-4 py-3 num text-ink-500">{money(b.gst)}</td>
+                                  <td className="px-4 py-3 num font-bold text-teal-700">{money(b.net_received)}</td>
+                                </tr>
+                              ))}
+                              {financeBookings.length === 0 && (
+                                <tr><td colSpan={8} className="px-4 py-10 text-center text-ink-400">No bookings match.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Expenses */}
+              {activeReport === 'expenses' && (
+                <motion.div
+                  key="expenses"
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }}
+                  className="space-y-4"
+                >
+                  {/* Add expense */}
+                  <form onSubmit={addExpense} className="surface p-5 space-y-3">
+                    <h3 className="font-display font-bold text-ink-900 text-base">Record an expense</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Category</label>
+                        <select value={expenseForm.category} onChange={e => setExpenseForm(f => ({ ...f, category: e.target.value }))} className="input-base">
+                          {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Amount (₹)</label>
+                        <input type="number" min="0" step="0.01" value={expenseForm.amount}
+                          onChange={e => setExpenseForm(f => ({ ...f, amount: e.target.value }))} className="input-base num" />
+                      </div>
+                      <div>
+                        <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Date</label>
+                        <input type="date" value={expenseForm.expense_date}
+                          onChange={e => setExpenseForm(f => ({ ...f, expense_date: e.target.value }))} className="input-base num" />
+                      </div>
+                      <div>
+                        <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Payment mode</label>
+                        <select value={expenseForm.payment_mode} onChange={e => setExpenseForm(f => ({ ...f, payment_mode: e.target.value }))} className="input-base">
+                          {PAYMENT_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Description</label>
+                        <input value={expenseForm.description}
+                          onChange={e => setExpenseForm(f => ({ ...f, description: e.target.value }))} className="input-base" placeholder="What was it for?" />
+                      </div>
+                      <div>
+                        <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Paid to</label>
+                        <input value={expenseForm.paid_to}
+                          onChange={e => setExpenseForm(f => ({ ...f, paid_to: e.target.value }))} className="input-base" />
+                      </div>
+                      <div className="flex items-end">
+                        <button type="submit" disabled={savingExpense} className="btn btn-primary w-full">
+                          <FaPlus size={10} /> {savingExpense ? 'Saving…' : 'Add'}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  {/* Expense list */}
+                  <div className="surface overflow-hidden">
+                    <div className="px-5 py-4 border-b border-ink-100 flex items-center justify-between gap-2 flex-wrap">
+                      <h3 className="font-display font-bold text-ink-900 text-base">
+                        Expenses <span className="text-ink-500 font-medium num">· {money(expenseTotal)}</span>
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <FaSearch size={10} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+                          <input value={expenseSearch}
+                            onChange={e => setExpenseSearch(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && loadExpenses(expenseSearch)}
+                            placeholder="Search expenses…" className="input-base pl-8 py-1.5 text-sm w-52" />
+                        </div>
+                        <button onClick={() => loadExpenses(expenseSearch)} className="btn btn-outline py-1.5">Search</button>
+                        <button onClick={exportExpenses} className="btn btn-outline py-1.5" title="Export CSV"><FaDownload size={11} /></button>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-3xs uppercase tracking-widest text-ink-500 border-b border-ink-100">
+                            {['Date', 'Category', 'Description', 'Paid to', 'Mode', 'Amount', ''].map(h => (
+                              <th key={h} className="px-4 py-2.5 font-bold whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-ink-100">
+                          {expenses.map(e => (
+                            <tr key={e.id} className="hover:bg-ink-50">
+                              <td className="px-4 py-3 num text-ink-500 whitespace-nowrap">{e.expense_date}</td>
+                              <td className="px-4 py-3"><span className="pill capitalize">{e.category}</span></td>
+                              <td className="px-4 py-3 text-ink-700">{e.description || '—'}</td>
+                              <td className="px-4 py-3 text-ink-500">{e.paid_to || '—'}</td>
+                              <td className="px-4 py-3 text-ink-500">{e.payment_mode || '—'}</td>
+                              <td className="px-4 py-3 num font-bold text-ink-900">{money(e.amount)}</td>
+                              <td className="px-4 py-3">
+                                <button onClick={() => deleteExpense(e.id)} className="text-ink-400 hover:text-red-600" title="Delete">
+                                  <FaTrash size={11} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {expenses.length === 0 && (
+                            <tr><td colSpan={7} className="px-4 py-10 text-center text-ink-400">No expenses recorded.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -388,7 +687,7 @@ export default function ReportsDashboard() {
                         <div className="mt-2 text-xs text-ink-500 flex flex-wrap gap-3">
                           <span className="inline-flex items-center gap-1">🏠 {entry.property.name} · Room <span className="num font-bold">{entry.room.number}</span></span>
                           <span className="inline-flex items-center gap-1">📅 {entry.check_in?.slice(0, 10)} → {entry.check_out?.slice(0, 10)}</span>
-                          <span className="inline-flex items-center gap-1 font-bold text-ink-900 num">💳 ₹{entry.amount?.toLocaleString()}</span>
+                          <span className="inline-flex items-center gap-1 font-bold text-ink-900 num">💳 {money(entry.amount)}</span>
                           <span>· {entry.payment_method}</span>
                         </div>
                         {entry.coguests?.length > 0 && (
@@ -406,6 +705,34 @@ export default function ReportsDashboard() {
                         <p className="text-sm">No bookings in this date range</p>
                       </div>
                     )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* GRC daily report (PDF) */}
+              {activeReport === 'grc' && (
+                <motion.div
+                  key="grc"
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }}
+                  className="surface p-6"
+                >
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <FaIdCard className="text-teal-600" size={14} />
+                    <h3 className="font-display font-bold text-ink-900 text-base">Daily Guest Registration Card</h3>
+                  </div>
+                  <p className="text-sm text-ink-500 mb-4">
+                    Download a print-ready PDF with one Guest Registration Card per arriving
+                    booking for the selected day (the GRC template reception fills on arrival).
+                  </p>
+                  <div className="flex items-end gap-3 flex-wrap">
+                    <div>
+                      <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Date</label>
+                      <input type="date" value={grcDate} onChange={e => setGrcDate(e.target.value)} className="input-base num" />
+                    </div>
+                    <button onClick={downloadGRC} className="btn btn-primary">
+                      <FaDownload size={11} /> Download GRC PDF
+                    </button>
                   </div>
                 </motion.div>
               )}
