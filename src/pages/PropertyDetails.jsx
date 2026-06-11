@@ -808,73 +808,90 @@ function RoomSection({
         </div>
       )}
 
-      {/* Single room */}
-      {bookingScope === 'room' && (
-        <div className={`space-y-3 ${inline ? '' : 'max-h-[420px] overflow-y-auto pr-1 scrollbar-none'}`}>
-          {availableRooms.map((room, idx) => (
-            <motion.div
-              key={room.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.03, duration: 0.3 }}
-              className={`surface overflow-hidden transition group p-0 ${room.is_available ? 'hover:border-teal-300 hover:shadow-md' : 'opacity-50'
-                }`}
-            >
-              <div className="flex">
-                <div className="w-24 sm:w-28 flex-shrink-0 overflow-hidden bg-ink-100 relative">
-                  <img
-                    src={room.images?.[0] || ROOM_IMAGES[idx % ROOM_IMAGES.length]}
-                    alt={`Room ${room.room_number}`}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    loading="lazy"
-                    onError={e => { e.target.onerror = null; e.target.src = ROOM_IMAGES[0]; }}
-                  />
-                </div>
-                <div className="flex-1 p-3 sm:p-3.5 flex flex-col justify-between min-w-0">
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-display font-bold text-ink-900 text-sm">
-                          Room <span className="num">{room.room_number}</span>
-                        </p>
-                        <p className="text-2xs text-ink-500 uppercase tracking-widest font-semibold truncate">
-                          {room.room_type}{room.floor ? ` · ${room.floor}` : ''}
-                        </p>
+      {/* Room types (guests pick a type, e.g. AC Deluxe / Non-AC, not an
+          individual room number). Availability is per type for the dates. */}
+      {bookingScope === 'room' && (() => {
+        const groups = Object.values(availableRooms.reduce((acc, room) => {
+          const key = room.room_type || 'Room';
+          if (!acc[key]) acc[key] = { type: key, rooms: [], available: [] };
+          acc[key].rooms.push(room);
+          if (room.is_available) acc[key].available.push(room);
+          return acc;
+        }, {}));
+        // Available types first, then by lowest price.
+        groups.sort((a, b) =>
+          (b.available.length > 0) - (a.available.length > 0)
+          || Math.min(...a.rooms.map(r => r.price_per_night || Infinity))
+           - Math.min(...b.rooms.map(r => r.price_per_night || Infinity)));
+        return (
+          <div className={`space-y-3 ${inline ? '' : 'max-h-[420px] overflow-y-auto pr-1 scrollbar-none'}`}>
+            {groups.map((g, idx) => {
+              const rep = g.available[0] || g.rooms[0];
+              const minPrice = Math.min(...g.rooms.map(r => r.price_per_night || Infinity));
+              const isAvail = g.available.length > 0;
+              return (
+                <motion.div
+                  key={g.type}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.04, duration: 0.3 }}
+                  className={`surface overflow-hidden transition group p-0 ${isAvail ? 'hover:border-teal-300 hover:shadow-md' : 'opacity-60'}`}
+                >
+                  <div className="flex">
+                    <div className="w-24 sm:w-28 flex-shrink-0 overflow-hidden bg-ink-100 relative">
+                      <img
+                        src={rep.images?.[0] || ROOM_IMAGES[idx % ROOM_IMAGES.length]}
+                        alt={g.type}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        loading="lazy"
+                        onError={e => { e.target.onerror = null; e.target.src = ROOM_IMAGES[0]; }}
+                      />
+                    </div>
+                    <div className="flex-1 p-3 sm:p-3.5 flex flex-col justify-between min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-display font-bold text-ink-900 text-sm capitalize">{g.type}</p>
+                          <p className="text-2xs uppercase tracking-widest font-bold mt-0.5">
+                            {isAvail
+                              ? <span className="text-teal-700">{g.available.length} available</span>
+                              : <span className="text-red-500">Sold out</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 bg-ink-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                          <FaUser size={9} className="text-ink-500" />
+                          <span className="text-2xs font-bold text-ink-700 num">{rep.capacity}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 bg-ink-100 px-2 py-0.5 rounded-full flex-shrink-0">
-                        <FaUser size={9} className="text-ink-500" />
-                        <span className="text-2xs font-bold text-ink-700 num">{room.capacity}</span>
+                      <div className="flex items-end justify-between mt-2">
+                        <div>
+                          <span className="font-display font-black text-ink-900 text-base num">₹{minPrice.toLocaleString()}</span>
+                          <span className="text-2xs text-ink-500 ml-1">/night</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => navigate(`/property/${property.id}/room/${rep.id}`)}
+                            className="text-xs font-bold text-ink-600 hover:text-teal-700 transition-colors px-2"
+                          >
+                            Details
+                          </button>
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => isAvail && handleBookRoom(g.available[0])}
+                            disabled={!isAvail}
+                            className={`btn ${isAvail ? 'btn-primary' : 'btn-outline opacity-50'} px-3 sm:px-4 py-2 text-xs`}
+                          >
+                            {isAvail ? 'Reserve' : 'Sold out'}
+                          </motion.button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-end justify-between mt-2">
-                    <div>
-                      <span className="font-display font-black text-ink-900 text-base num">₹{room.price_per_night?.toLocaleString()}</span>
-                      <span className="text-2xs text-ink-500 ml-1">/night</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => navigate(`/property/${property.id}/room/${room.id}`)}
-                        className="text-xs font-bold text-ink-600 hover:text-teal-700 transition-colors px-2"
-                      >
-                        Details
-                      </button>
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleBookRoom(room)}
-                        disabled={!room.is_available}
-                        className={`btn ${room.is_available ? 'btn-primary' : 'btn-outline opacity-50'} px-3 sm:px-4 py-2 text-xs`}
-                      >
-                        {room.is_available ? 'Reserve' : 'Sold out'}
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
+                </motion.div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Custom selection */}
       {bookingScope === 'custom' && (
@@ -1126,7 +1143,23 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
   const [loading, setLoading] = useState(false);
 
   const nights = Math.max(1, Math.ceil((new Date(dates.checkOut) - new Date(dates.checkIn)) / 86400000));
-  const basePrice = rooms.reduce((sum, r) => sum + r.price_per_night * nights, 0);
+
+  // Guest limits come from the room(s). `capacity` = guests included in the
+  // nightly rate; `max_occupancy` = the admin-set hard cap. Guests beyond
+  // capacity (up to max) cost `extra_guest_charge` each, per night.
+  const includedGuests = rooms.reduce((s, r) => s + (Number(r.capacity) || 1), 0);
+  const maxGuests = rooms.reduce((s, r) => s + (Number(r.max_occupancy) || Number(r.capacity) || 1), 0);
+  // Extra-guest pricing only applies to a single-room booking; group scopes
+  // (floor / property / custom) bill per room at the included occupancy.
+  const extraGuestCharge = bookingScope === 'room' ? (Number(rooms[0]?.extra_guest_charge) || 0) : 0;
+  const guestsTotal = Math.min(maxGuests, Math.max(1, parseInt(guestData.guests) || 1));
+  const extraGuests = bookingScope === 'room' ? Math.max(0, guestsTotal - includedGuests) : 0;
+  const extraGuestTotal = extraGuests * extraGuestCharge * nights;
+  // Whether to show guest selection at all (point 2): only when >1 is allowed.
+  const allowsMultipleGuests = maxGuests > 1;
+
+  const roomBase = rooms.reduce((sum, r) => sum + r.price_per_night * nights, 0);
+  const basePrice = roomBase + extraGuestTotal;
   const discountAmount = couponResult?.discount_amount || 0;
   const finalPrice = couponResult?.final_amount ?? basePrice;
   const roomSummary = bookingScope === 'room'
@@ -1150,15 +1183,19 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
 
   const addNewGuest = () => {
     if (!newGuest.name.trim()) return toast.error('Name required');
+    if (coguests.length >= guestsTotal - 1) {
+      return toast.error(`Details already added for all ${guestsTotal} guests`);
+    }
     setCoguests([...coguests, { ...newGuest, id: Date.now().toString() }]);
     setNewGuest({ name: '', phone: '', email: '', relationship: '', save_to_list: true });
     setShowAddGuest(false);
   };
 
+  // number_of_guests is the TOTAL party size (primary + co-guests).
   const buildBookingPayload = () => ({
     room_id: rooms[0].id, property_id: property.id,
     check_in_date: dates.checkIn, check_out_date: dates.checkOut,
-    number_of_guests: parseInt(guestData.guests) + coguests.length,
+    number_of_guests: guestsTotal,
     coguests: coguests.map(g => ({ name: g.name, email: g.email, phone: g.phone, relationship: g.relationship })),
     consent_agreed: true, coupon_code: couponResult ? couponCode : '',
     special_requests: guestData.special_requests,
@@ -1169,7 +1206,7 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
     booking_scope: bookingScope, floor_name: floorName || '',
     room_ids: rooms.map(r => r.id), property_id: property.id,
     check_in_date: dates.checkIn, check_out_date: dates.checkOut,
-    number_of_guests: parseInt(guestData.guests) + coguests.length,
+    number_of_guests: guestsTotal,
     coguests: coguests.map(g => ({ name: g.name, email: g.email, phone: g.phone, relationship: g.relationship })),
     consent_agreed: true, coupon_code: couponResult ? couponCode : '',
     special_requests: guestData.special_requests,
@@ -1177,9 +1214,15 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
   });
 
   const validateForm = () => {
-    // Only name + phone are mandatory for the guest; everything else
-    // (email, ID, address, etc.) is collected by reception on arrival.
+    // Primary guest must have name + phone; reception collects ID on arrival.
     if (!guestData.name || !guestData.phone) { toast.error('Please enter your name and phone number'); return false; }
+    // Every additional guest needs their details before booking (point 4):
+    // a party of N requires N-1 named co-guests.
+    const namedCoguests = coguests.filter(g => (g.name || '').trim()).length;
+    if (guestsTotal > 1 && namedCoguests < guestsTotal - 1) {
+      toast.error(`Please add details for all ${guestsTotal} guests before booking`);
+      return false;
+    }
     if (!consentAgreed) { toast.error('Agree to terms to continue'); return false; }
     return true;
   };
@@ -1243,8 +1286,8 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
         const r = await apiClient.post('/bookings/group', buildGroupBookingPayload());
         bookingId = r.data.data.primary_booking_id;
       }
-      await apiClient.post(`/bookings/${bookingId}/confirm-offline`);
-      toast.success('Booking confirmed! Pay on arrival.');
+      const offlineRes = await apiClient.post(`/bookings/${bookingId}/confirm-offline`);
+      toast.success(offlineRes.data?.message || 'Booking received! Pay at the property to confirm.');
       onSuccess();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed');
@@ -1308,7 +1351,13 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
                 </div>
               </div>
               <div className="border-t border-teal-200 pt-3 space-y-1.5 text-sm">
-                <div className="flex justify-between text-ink-600"><span>Base price</span><span className="num font-semibold">₹{basePrice.toLocaleString()}</span></div>
+                <div className="flex justify-between text-ink-600"><span>Room{rooms.length > 1 ? `s (${rooms.length})` : ''} · {nights}n</span><span className="num font-semibold">₹{roomBase.toLocaleString()}</span></div>
+                {extraGuestTotal > 0 && (
+                  <div className="flex justify-between text-ink-600">
+                    <span>Extra guest{extraGuests !== 1 ? 's' : ''} ({extraGuests} × ₹{extraGuestCharge.toLocaleString()} × {nights}n)</span>
+                    <span className="num font-semibold">₹{extraGuestTotal.toLocaleString()}</span>
+                  </div>
+                )}
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-teal-700 font-bold">
                     <span>Discount ({couponCode})</span>
@@ -1331,11 +1380,20 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
                 onChange={e => setGuestData({ ...guestData, name: e.target.value })} className="input-base" />
               <input type="email" placeholder="Email address (optional)" value={guestData.email}
                 onChange={e => setGuestData({ ...guestData, email: e.target.value })} className="input-base" />
-              <div className="grid grid-cols-2 gap-3">
+              <div className={allowsMultipleGuests ? 'grid grid-cols-2 gap-3' : ''}>
                 <input type="tel" placeholder="Phone *" value={guestData.phone}
                   onChange={e => setGuestData({ ...guestData, phone: e.target.value })} className="input-base num" />
-                <input type="number" min="1" placeholder="Guests" value={guestData.guests}
-                  onChange={e => setGuestData({ ...guestData, guests: e.target.value })} className="input-base num" />
+                {/* Guest count is a selection capped at the room's max occupancy
+                    (points 2, 5, 6) — only shown when more than one is allowed. */}
+                {allowsMultipleGuests && (
+                  <select value={guestsTotal}
+                    onChange={e => setGuestData({ ...guestData, guests: e.target.value })}
+                    className="input-base num">
+                    {Array.from({ length: maxGuests }, (_, i) => i + 1).map(n => (
+                      <option key={n} value={n}>{n} {n === 1 ? 'guest' : 'guests'}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <textarea placeholder="Special requests (optional)" value={guestData.special_requests}
                 onChange={e => setGuestData({ ...guestData, special_requests: e.target.value })}
@@ -1343,14 +1401,27 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
             </div>
           </div>
 
-          {/* Additional guests */}
+          {/* Additional guests — only when the party is more than one (point 2).
+              Details are required for every guest beyond the primary (point 4). */}
+          {allowsMultipleGuests && guestsTotal > 1 && (
           <div>
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex justify-between items-center mb-1">
               <span className="section-eyebrow">Additional guests</span>
-              <button type="button" onClick={() => setShowAddGuest(true)} className="btn btn-outline px-3 py-1.5 text-xs">
+              <button type="button"
+                onClick={() => {
+                  if (coguests.length >= guestsTotal - 1) {
+                    toast.error(`Details already added for all ${guestsTotal} guests`); return;
+                  }
+                  setShowAddGuest(true);
+                }}
+                disabled={coguests.length >= guestsTotal - 1}
+                className="btn btn-outline px-3 py-1.5 text-xs disabled:opacity-40">
                 <FaPlus size={9} /> Add
               </button>
             </div>
+            <p className={`text-2xs mb-3 ${coguests.filter(g => (g.name || '').trim()).length >= guestsTotal - 1 ? 'text-teal-600' : 'text-sunset-600'}`}>
+              {coguests.filter(g => (g.name || '').trim()).length} of {guestsTotal - 1} additional guest{guestsTotal - 1 !== 1 ? 's' : ''} added
+            </p>
             <AnimatePresence>
               {showAddGuest && (
                 <motion.div
@@ -1408,6 +1479,7 @@ function BookingCheckout({ rooms, bookingScope, floorName, property, dates, user
               </div>
             )}
           </div>
+          )}
 
           {/* Coupon */}
           <div>

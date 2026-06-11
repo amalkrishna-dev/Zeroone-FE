@@ -3,8 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaSignInAlt, FaSignOutAlt, FaUserCircle, FaCompass,
-  FaBookmark, FaBars, FaTimes, FaHeadset, FaChevronDown,
-  FaMapMarkedAlt, FaPercent,
+  FaBookmark, FaBars, FaTimes, FaChevronDown,
 } from 'react-icons/fa';
 import { useAuthStore } from '../store';
 
@@ -30,9 +29,6 @@ export default function Navbar({
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  // Which in-page section (#deals / #help) is currently in view - drives
-  // the nav highlight so Deals/Help light up like the other links.
-  const [activeSection, setActiveSection] = useState(null);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -55,74 +51,28 @@ export default function Navbar({
     return () => { document.body.style.overflow = ''; };
   }, [drawerOpen]);
 
-  // Scroll-spy: highlight Deals / Help when their section sits in the
-  // middle band of the viewport. Clears (→ Stays) when neither is centered.
-  useEffect(() => {
-    const els = ['deals', 'help']
-      .map(id => document.getElementById(id))
-      .filter(Boolean);
-    if (!els.length) return undefined;
-    const obs = new IntersectionObserver((entries) => {
-      setActiveSection(prev => {
-        let next = prev;
-        entries.forEach(e => {
-          if (e.isIntersecting) next = e.target.id;
-          else if (e.target.id === next) next = null;
-        });
-        return next;
-      });
-    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
-    els.forEach(el => obs.observe(el));
-    return () => obs.disconnect();
-  }, [location.pathname, activeTab]);
-
   const useDarkText = !transparent || scrolled;
 
   const NAV_LINKS = [
     { id: 'explore', to: '/properties', label: 'Stays', icon: FaCompass, authOnly: false },
-    { id: 'deals', to: '/properties#deals', label: 'Deals', icon: FaPercent, authOnly: false },
-    { id: 'help', to: '/properties#help', label: 'Help', icon: FaHeadset, authOnly: false },
     { id: 'bookings', to: '/dashboard', label: 'My Trips', icon: FaBookmark, authOnly: true },
+    { id: 'profile', to: '/dashboard', label: 'Profile', icon: FaUserCircle, authOnly: true },
   ];
 
   const isActive = (link) => {
-    if (link.id === 'deals' || link.id === 'help') return activeSection === link.id;
     if (showTabs && activeTab) {
-      // Stays stays highlighted only while no in-page section is in view.
-      if (link.id === 'explore') return activeTab === 'explore' && !activeSection;
+      if (link.id === 'explore') return activeTab === 'explore';
       if (link.id === 'bookings') return activeTab === 'bookings';
+      if (link.id === 'profile') return activeTab === 'profile';
     }
-    return location.pathname === link.to && !activeSection;
+    return location.pathname === link.to;
   };
 
-  // Scroll to an in-page section (#deals / #help). If we're already on the
-  // landing page, switch to the explore tab and scroll; otherwise navigate
-  // to /properties#id and let the landing page handle the scroll on load.
-  const goToSection = useCallback((id) => {
-    setDrawerOpen(false);
-    setMenuOpen(false);
-    setActiveSection(id);  // immediate highlight; the observer keeps it in sync
-    if (location.pathname === '/properties') {
-      if (showTabs && onTabChange) onTabChange('explore');
-      setTimeout(() => {
-        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 80);
-    } else {
-      navigate(`/properties#${id}`);
-    }
-  }, [showTabs, onTabChange, location.pathname, navigate]);
-
   const handleNavClick = useCallback((link, e) => {
-    if (link.id === 'deals' || link.id === 'help') {
+    const TAB_IDS = ['explore', 'bookings', 'profile'];
+    if (showTabs && onTabChange && TAB_IDS.includes(link.id)) {
       e?.preventDefault?.();
-      goToSection(link.id);
-      return;
-    }
-    // Any non-section link clears the section highlight.
-    setActiveSection(null);
-    if (showTabs && onTabChange && (link.id === 'explore' || link.id === 'bookings')) {
-      e?.preventDefault?.();
-      if (link.id === 'bookings' && !isAuthenticated) {
+      if ((link.id === 'bookings' || link.id === 'profile') && !isAuthenticated) {
         navigate('/login');
         return;
       }
@@ -131,7 +81,7 @@ export default function Navbar({
     } else {
       setDrawerOpen(false);
     }
-  }, [showTabs, onTabChange, isAuthenticated, navigate, goToSection]);
+  }, [showTabs, onTabChange, isAuthenticated, navigate]);
 
   return (
     <>
@@ -273,7 +223,6 @@ export default function Navbar({
                         {[
                           { label: 'My trips', icon: FaBookmark, onClick: () => { showTabs ? onTabChange?.('bookings') : navigate('/dashboard'); setMenuOpen(false); } },
                           { label: 'Profile', icon: FaUserCircle, onClick: () => { showTabs ? onTabChange?.('profile') : navigate('/dashboard'); setMenuOpen(false); } },
-                          { label: 'Help & support', icon: FaHeadset, onClick: () => { goToSection('help'); } },
                         ].map(({ label, icon: Icon, onClick }) => (
                           <button
                             key={label}
@@ -424,7 +373,7 @@ export default function Navbar({
                         <FaSignInAlt size={11} /> Sign in
                       </button>
                       <p className="text-xs text-ink-500 text-center">
-                        New here? Sign in with your phone - no passwords needed.
+                        Sign in with your email or phone and password.
                       </p>
                     </>
                   ) : (

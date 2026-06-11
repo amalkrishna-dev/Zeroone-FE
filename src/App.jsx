@@ -1,9 +1,15 @@
-import React, { useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useCallback, lazy, Suspense } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store';
-import apiClient from './api/client';
+import apiClient, { SESSION_EXPIRED_EVENT } from './api/client';
 import { getAccessToken, clearTokens } from './api/tokenStorage';
+import useIdleTimeout from './hooks/useIdleTimeout';
+import SessionExpiredModal from './components/SessionExpiredModal';
+
+// Idle timeout before a signed-in session is ended (default 30 min).
+const IDLE_TIMEOUT_MS =
+  (Number(process.env.REACT_APP_IDLE_TIMEOUT_MIN) || 30) * 60 * 1000;
 
 const Auth = lazy(() => import('./pages/Auth'));
 const AdminAuth = lazy(() => import('./pages/AdminAuth'));
@@ -41,10 +47,20 @@ function roleHome(user) {
   return '/dashboard';
 }
 
+// Staff/company areas send unauthenticated visitors to the company login;
+// everything else falls back to the customer login.
+const STAFF_ROLES = ['global_admin', 'org_admin', 'employee', 'admin'];
+function loginPathFor(allowedRoles) {
+  if (allowedRoles && allowedRoles.every(r => STAFF_ROLES.includes(r))) {
+    return '/company-login';
+  }
+  return '/login';
+}
+
 function ProtectedRoute({ children, allowedRoles = null }) {
   const { user, isAuthenticated, isInitializing } = useAuthStore();
   if (isInitializing) return <PageLoader />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <Navigate to={loginPathFor(allowedRoles)} replace />;
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
     return <Navigate to={roleHome(user)} replace />;
   }
@@ -67,6 +83,44 @@ function RootRedirect() {
   if (isInitializing) return <PageLoader />;
   if (!isAuthenticated) return <Navigate to="/properties" replace />;
   return <Navigate to={roleHome(user)} replace />;
+}
+
+// Owns the "session expired" lifecycle: arms an idle timer while signed
+// in, listens for the refresh-failure event from the API client, and shows
+// a blocking modal. The only exit is "Sign in again", which clears auth and
+// returns to the login page. Must live inside <Router> (uses navigation).
+function SessionGate() {
+  const navigate = useNavigate();
+  const { user, isAuthenticated, sessionExpired, expireSession, logout } = useAuthStore();
+
+  const handleExpire = useCallback(() => {
+    // Drop tokens immediately so any in-flight requests stop succeeding,
+    // but keep `user` in state so the modal can greet them by name.
+    clearTokens();
+    expireSession();
+  }, [expireSession]);
+
+  // Idle timeout (only armed while signed in and not already expired).
+  useIdleTimeout(handleExpire, {
+    timeoutMs: IDLE_TIMEOUT_MS,
+    enabled: isAuthenticated && !sessionExpired,
+  });
+
+  // Token-refresh failures raised by the axios interceptor.
+  useEffect(() => {
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpire);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpire);
+  }, [handleExpire]);
+
+  const handleSignIn = useCallback(() => {
+    const dest = STAFF_ROLES.includes(user?.role) ? '/company-login' : '/login';
+    logout();
+    navigate(dest, { replace: true });
+  }, [logout, navigate, user]);
+
+  return (
+    <SessionExpiredModal open={sessionExpired} name={user?.name} onSignIn={handleSignIn} />
+  );
 }
 
 function App() {
@@ -97,7 +151,9 @@ function App() {
         <Routes>
           {/* Public routes - blocked once authenticated (sign out to return) */}
           <Route path="/login" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
-          <Route path="/staff" element={<PublicOnlyRoute><AdminAuth /></PublicOnlyRoute>} />
+          <Route path="/company-login" element={<PublicOnlyRoute><AdminAuth /></PublicOnlyRoute>} />
+          {/* Legacy staff URL → company login */}
+          <Route path="/staff" element={<Navigate to="/company-login" replace />} />
           <Route path="/properties" element={<Dashboard publicMode />} />
           <Route path="/property/:propertyId" element={<PropertyDetails />} />
           <Route path="/property/:propertyId/room/:roomId" element={<RoomDetails />} />
@@ -164,6 +220,7 @@ function App() {
           <Route path="*" element={<RootRedirect />} />
         </Routes>
       </Suspense>
+      <SessionGate />
       <Toaster
         position="top-center"
         gutter={8}

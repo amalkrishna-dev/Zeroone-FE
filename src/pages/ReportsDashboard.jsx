@@ -11,6 +11,7 @@ import {
   FaArrowLeft, FaChartBar, FaDownload, FaFileAlt, FaFilter,
   FaRupeeSign, FaHotel, FaUserCheck, FaExclamationCircle,
   FaBalanceScale, FaReceipt, FaIdCard, FaSearch, FaPlus, FaTrash,
+  FaFileInvoiceDollar, FaBan, FaTimes,
 } from 'react-icons/fa';
 
 const money = (v) => `₹${Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
@@ -20,6 +21,7 @@ const EXPENSE_CATEGORIES = [
   'ota_payout', 'marketing', 'rent', 'other',
 ];
 const PAYMENT_MODES = ['cash', 'card', 'upi', 'bank', 'other'];
+const REFUND_METHODS = ['razorpay', 'cash', 'card', 'upi', 'bank', 'other'];
 
 const EMPTY_EXPENSE = {
   category: 'maintenance', amount: '', description: '',
@@ -50,6 +52,10 @@ export default function ReportsDashboard() {
   const [grcDate, setGrcDate] = useState(today);
   const [loading, setLoading] = useState(false);
   const [activeReport, setActiveReport] = useState('revenue');
+  const [refundData, setRefundData] = useState({ refunds: [], cancellations: [], total_refunded: 0 });
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelForm, setCancelForm] = useState({ reason: '', refund_amount: '', refund_method: 'razorpay' });
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     apiClient.get('/properties').then(res => setProperties(res.data.data || [])).catch(() => {});
@@ -75,6 +81,19 @@ export default function ReportsDashboard() {
     } catch { /* finance perms may be absent */ }
   }, [params]);
 
+  const loadRefunds = useCallback(async () => {
+    try {
+      const res = await apiClient.get(`/finance/refunds?${params()}`);
+      setRefundData(res.data.data || { refunds: [], cancellations: [], total_refunded: 0 });
+    } catch { /* finance perms may be absent */ }
+  }, [params]);
+
+  const refreshFinance = useCallback(() => {
+    apiClient.get(`/finance/summary?${params()}`).then(r => setFinanceSummary(r.data.data)).catch(() => {});
+    loadFinanceBookings(financeSearch);
+    loadRefunds();
+  }, [params, loadFinanceBookings, loadRefunds, financeSearch]);
+
   async function fetchReports() {
     if (!selectedProperty) { toast.error('Please select a property'); return; }
     setLoading(true);
@@ -92,6 +111,7 @@ export default function ReportsDashboard() {
       apiClient.get(`/finance/summary?${p}`).then(r => setFinanceSummary(r.data.data)).catch(() => setFinanceSummary(null));
       loadFinanceBookings('');
       loadExpenses('');
+      loadRefunds();
     } catch { toast.error('Failed to fetch reports'); }
     finally { setLoading(false); }
   }
@@ -114,6 +134,40 @@ export default function ReportsDashboard() {
   async function exportExpenses() {
     try { await downloadBlob(`/finance/expenses/export?${params()}`, `expenses_${fromDate}_${toDate}.csv`); }
     catch { toast.error('Export failed'); }
+  }
+
+  async function exportRefunds() {
+    try { await downloadBlob(`/finance/refunds/export?${params()}`, `refunds_${fromDate}_${toDate}.csv`); }
+    catch { toast.error('Export failed'); }
+  }
+
+  async function downloadInvoice(bookingId) {
+    try {
+      await downloadBlob(`/finance/bookings/${bookingId}/invoice`, `invoice_${bookingId.slice(0, 8)}.pdf`);
+      toast.success('Invoice downloaded');
+    } catch { toast.error('Failed to generate invoice'); }
+  }
+
+  function openCancel(row) {
+    setCancelForm({ reason: '', refund_amount: '', refund_method: 'razorpay' });
+    setCancelTarget(row);
+  }
+
+  async function submitCancel() {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try {
+      await apiClient.post(`/finance/bookings/${cancelTarget.booking_id}/cancel`, {
+        reason: cancelForm.reason,
+        refund_amount: cancelForm.refund_amount ? Number(cancelForm.refund_amount) : 0,
+        refund_method: cancelForm.refund_method,
+      });
+      toast.success('Booking cancelled');
+      setCancelTarget(null);
+      refreshFinance();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Failed to cancel booking');
+    } finally { setCancelling(false); }
   }
 
   async function downloadGRC() {
@@ -385,7 +439,9 @@ export default function ReportsDashboard() {
                           { label: 'OTA commission', value: money(financeSummary.ota_commission) },
                           { label: 'GST', value: money(financeSummary.gst) },
                           { label: 'Expenses', value: money(financeSummary.total_expenses) },
-                          { label: 'Balance', value: money(financeSummary.balance), accent: true },
+                          { label: 'Net profit', value: money(financeSummary.balance), accent: true },
+                          { label: 'ADR', value: money(financeSummary.kpis?.adr) },
+                          { label: 'Room nights', value: financeSummary.kpis?.room_nights ?? 0 },
                         ].map((card, i) => (
                           <motion.div
                             key={card.label}
@@ -398,6 +454,122 @@ export default function ReportsDashboard() {
                             <p className="stat-number" style={card.accent ? { color: '#0891b2' } : undefined}>{card.value}</p>
                           </motion.div>
                         ))}
+                      </div>
+
+                      {/* ── Revenue recognition: earned vs unearned ── */}
+                      {financeSummary.revenue_recognition && (
+                        <div className="surface p-5 sm:p-6">
+                          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                            <div>
+                              <h3 className="font-display font-bold text-ink-900 text-base">Revenue recognition</h3>
+                              <p className="text-2xs text-ink-400 mt-0.5">Earned as nights are consumed; cash taken for future nights stays a liability.</p>
+                            </div>
+                            <span className="pill">as of {financeSummary.revenue_recognition.as_of}</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="rounded-2xl p-5 border" style={{ background: 'linear-gradient(135deg,#ecfdf5,#f0fdfa)', borderColor: '#a7f3d0' }}>
+                              <p className="text-3xs font-bold uppercase tracking-widest text-emerald-700 mb-1.5">Earned revenue</p>
+                              <p className="stat-number" style={{ color: '#047857' }}>{money(financeSummary.revenue_recognition.earned)}</p>
+                              <p className="text-2xs text-emerald-700/70 mt-1.5">Recognised — value of nights already stayed.</p>
+                            </div>
+                            <div className="rounded-2xl p-5 border" style={{ background: 'linear-gradient(135deg,#fffbeb,#fff7ed)', borderColor: '#fde68a' }}>
+                              <p className="text-3xs font-bold uppercase tracking-widest text-amber-700 mb-1.5">Unearned revenue</p>
+                              <p className="stat-number" style={{ color: '#b45309' }}>{money(financeSummary.revenue_recognition.unearned)}</p>
+                              <p className="text-2xs text-amber-700/70 mt-1.5">Deferred liability — collected in advance, not yet earned.</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+                            {[
+                              { label: 'Receivable', value: financeSummary.revenue_recognition.receivable, hint: 'Stayed, not collected' },
+                              { label: 'Cash collected', value: financeSummary.revenue_recognition.collected, hint: 'Received, net of refunds' },
+                              { label: 'Pipeline', value: financeSummary.revenue_recognition.pipeline, hint: 'Future, unpaid' },
+                              { label: 'Refunds', value: financeSummary.revenue_recognition.refunds, hint: 'Returned to guests', neg: true },
+                              { label: 'Cancellation income', value: financeSummary.revenue_recognition.cancellation_income, hint: 'Fees retained' },
+                            ].map(c => (
+                              <div key={c.label} className="rounded-xl border border-ink-100 p-3 bg-white">
+                                <p className="text-3xs font-bold uppercase tracking-widest text-ink-500 mb-1">{c.label}</p>
+                                <p className={`font-bold num text-sm sm:text-base ${c.neg && c.value ? 'text-red-600' : 'text-ink-900'}`}>{c.neg && c.value ? '−' : ''}{money(c.value)}</p>
+                                <p className="text-2xs text-ink-400 mt-0.5 hidden sm:block">{c.hint}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── P&L + collections + mix ── */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {financeSummary.profit_loss && (
+                          <div className="surface p-5">
+                            <h3 className="font-display font-bold text-ink-900 text-base mb-4">Profit &amp; Loss</h3>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-ink-600 font-semibold">Revenue (net of commission)</span>
+                                <span className="font-bold text-ink-900 num">{money(financeSummary.profit_loss.revenue)}</span>
+                              </div>
+                              {financeSummary.profit_loss.refunds > 0 && (
+                                <div className="flex justify-between text-ink-500">
+                                  <span>− Refunds</span>
+                                  <span className="num text-red-600">−{money(financeSummary.profit_loss.refunds)}</span>
+                                </div>
+                              )}
+                              {(financeSummary.profit_loss.expenses_by_category || []).map(c => (
+                                <div key={c.category} className="flex justify-between text-ink-500 pl-3">
+                                  <span className="capitalize">− {c.category}</span>
+                                  <span className="num">{money(c.amount)}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-between border-t border-ink-100 pt-2">
+                                <span className="text-ink-600 font-semibold">Total expenses</span>
+                                <span className="font-bold text-red-600 num">−{money(financeSummary.profit_loss.expenses)}</span>
+                              </div>
+                              <div className="flex justify-between border-t-2 border-ink-200 pt-2 items-baseline">
+                                <span className="text-ink-900 font-bold">Net profit</span>
+                                <span className="font-black num text-lg" style={{ color: financeSummary.profit_loss.net_profit >= 0 ? '#0891b2' : '#dc2626' }}>
+                                  {money(financeSummary.profit_loss.net_profit)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-ink-400 text-xs">Profit margin</span>
+                                <span className="text-xs font-bold text-ink-500 num">{financeSummary.profit_loss.margin_pct}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-4">
+                          {financeSummary.payment_breakdown && financeSummary.payment_breakdown.length > 0 && (
+                            <div className="surface p-5">
+                              <h3 className="font-display font-bold text-ink-900 text-base mb-3">Collections by mode</h3>
+                              <div className="space-y-2">
+                                {financeSummary.payment_breakdown.map(p => (
+                                  <div key={p.method} className="flex items-center justify-between text-sm">
+                                    <span className="capitalize text-ink-600">{p.method}<span className="text-ink-400 text-2xs num ml-1">×{p.count}</span></span>
+                                    <span className="font-bold text-ink-900 num">{money(p.amount)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {financeSummary.revenue_mix && (() => {
+                            const o = financeSummary.revenue_mix.ota_revenue || 0;
+                            const d = financeSummary.revenue_mix.direct_revenue || 0;
+                            const tot = o + d;
+                            const op = tot ? Math.round((o / tot) * 100) : 0;
+                            return (
+                              <div className="surface p-5">
+                                <h3 className="font-display font-bold text-ink-900 text-base mb-3">Revenue mix</h3>
+                                <div className="flex h-3 rounded-full overflow-hidden bg-ink-100 mb-3">
+                                  <div style={{ width: `${op}%`, background: '#f59e0b' }} />
+                                  <div style={{ width: `${100 - op}%`, background: '#0891b2' }} />
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-amber-600 font-semibold">OTA {money(o)}<span className="text-2xs text-ink-400 num ml-1">({financeSummary.revenue_mix.ota_bookings})</span></span>
+                                  <span className="text-teal-700 font-semibold">Direct {money(d)}<span className="text-2xs text-ink-400 num ml-1">({financeSummary.revenue_mix.direct_bookings})</span></span>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </div>
 
                       <div className="surface overflow-hidden">
@@ -424,7 +596,7 @@ export default function ReportsDashboard() {
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="text-left text-3xs uppercase tracking-widest text-ink-500 border-b border-ink-100">
-                                {['Guest', 'Room', 'Source', 'Check-in', 'Total', 'Commission', 'GST', 'Net'].map(h => (
+                                {['Guest', 'Room', 'Source', 'Check-in', 'Total', 'Commission', 'GST', 'Net', 'Actions'].map(h => (
                                   <th key={h} className="px-4 py-2.5 font-bold whitespace-nowrap">{h}</th>
                                 ))}
                               </tr>
@@ -447,15 +619,145 @@ export default function ReportsDashboard() {
                                   <td className="px-4 py-3 num text-amber-600">{money(b.ota_commission)}</td>
                                   <td className="px-4 py-3 num text-ink-500">{money(b.gst)}</td>
                                   <td className="px-4 py-3 num font-bold text-teal-700">{money(b.net_received)}</td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-1.5">
+                                      <button onClick={() => downloadInvoice(b.booking_id)} title="GST tax invoice"
+                                        className="h-7 w-7 rounded-lg bg-ink-50 hover:bg-teal-50 text-ink-500 hover:text-teal-700 flex items-center justify-center transition-colors">
+                                        <FaFileInvoiceDollar size={11} />
+                                      </button>
+                                      {b.status === 'cancelled' ? (
+                                        <span className="pill pill-danger text-2xs">Cancelled</span>
+                                      ) : (
+                                        <button onClick={() => openCancel(b)} title="Cancel booking"
+                                          className="h-7 w-7 rounded-lg bg-ink-50 hover:bg-red-50 text-ink-500 hover:text-red-600 flex items-center justify-center transition-colors">
+                                          <FaBan size={11} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
                                 </tr>
                               ))}
                               {financeBookings.length === 0 && (
-                                <tr><td colSpan={8} className="px-4 py-10 text-center text-ink-400">No bookings match.</td></tr>
+                                <tr><td colSpan={9} className="px-4 py-10 text-center text-ink-400">No bookings match.</td></tr>
                               )}
                             </tbody>
                           </table>
                         </div>
                       </div>
+
+                      {/* ── Refunds & cancellations ledger ── */}
+                      <div className="surface overflow-hidden">
+                        <div className="px-5 py-4 border-b border-ink-100 flex items-center justify-between gap-2 flex-wrap">
+                          <h3 className="font-display font-bold text-ink-900 text-base">
+                            Refunds &amp; cancellations
+                            <span className="text-ink-500 font-medium ml-2 num">· {money(refundData.total_refunded)} refunded</span>
+                          </h3>
+                          <button onClick={exportRefunds} className="btn btn-outline py-1.5" title="Export refunds CSV"><FaDownload size={11} /></button>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-3xs uppercase tracking-widest text-ink-500 border-b border-ink-100">
+                                {['Date', 'Booking', 'Guest', 'Amount', 'Method', 'Status', 'Reason'].map(h => (
+                                  <th key={h} className="px-4 py-2.5 font-bold whitespace-nowrap">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-ink-100">
+                              {(refundData.refunds || []).map(r => (
+                                <tr key={r.id} className="hover:bg-ink-50">
+                                  <td className="px-4 py-3 num text-ink-500 whitespace-nowrap">{r.refund_date}</td>
+                                  <td className="px-4 py-3 num text-ink-500">{r.booking_ref}</td>
+                                  <td className="px-4 py-3 text-ink-700">{r.guest_name || '—'}</td>
+                                  <td className="px-4 py-3 num font-bold text-red-600">−{money(r.amount)}</td>
+                                  <td className="px-4 py-3 capitalize text-ink-500">{r.refund_method || '—'}</td>
+                                  <td className="px-4 py-3">
+                                    <span className={`pill capitalize ${r.status === 'completed' ? 'pill-success' : r.status === 'pending' ? 'pill-amber' : 'pill-danger'}`}>{r.status}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-ink-500">{r.reason || '—'}</td>
+                                </tr>
+                              ))}
+                              {(refundData.refunds || []).length === 0 && (
+                                <tr><td colSpan={7} className="px-4 py-8 text-center text-ink-400">No refunds in this period.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                        {(refundData.cancellations || []).length > 0 && (
+                          <>
+                            <div className="px-5 py-3 border-t border-ink-100 bg-ink-50/60">
+                              <p className="text-3xs font-bold uppercase tracking-widest text-ink-500">
+                                Cancelled bookings ({refundData.cancellations.length})
+                              </p>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-left text-3xs uppercase tracking-widest text-ink-500 border-b border-ink-100">
+                                    {['Cancelled', 'Booking', 'Guest', 'Value', 'Refunded', 'Retained', 'Reason'].map(h => (
+                                      <th key={h} className="px-4 py-2.5 font-bold whitespace-nowrap">{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-ink-100">
+                                  {refundData.cancellations.map(c => (
+                                    <tr key={c.booking_id} className="hover:bg-ink-50">
+                                      <td className="px-4 py-3 num text-ink-500 whitespace-nowrap">{c.cancelled_at || '—'}</td>
+                                      <td className="px-4 py-3 num text-ink-500">{c.booking_ref}</td>
+                                      <td className="px-4 py-3 text-ink-700">{c.guest_name || '—'}</td>
+                                      <td className="px-4 py-3 num text-ink-500">{money(c.amount)}</td>
+                                      <td className="px-4 py-3 num text-red-600">{money(c.refunded)}</td>
+                                      <td className="px-4 py-3 num font-bold text-teal-700">{money(c.retained)}</td>
+                                      <td className="px-4 py-3 text-ink-500">{c.reason || '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* ── Cancel booking modal ── */}
+                      {cancelTarget && (
+                        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setCancelTarget(null)}>
+                          <div className="surface w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="font-display font-bold text-ink-900">Cancel booking</h3>
+                              <button onClick={() => setCancelTarget(null)} className="h-8 w-8 rounded-full bg-ink-100 hover:bg-ink-200 flex items-center justify-center text-ink-500"><FaTimes size={11} /></button>
+                            </div>
+                            <p className="text-sm text-ink-500 mb-4">
+                              {cancelTarget.guest_name || 'Guest'}
+                              {cancelTarget.room_number ? ` · Room ${cancelTarget.room_number}` : ''} · {money(cancelTarget.total_to_collect)}
+                            </p>
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Reason</label>
+                                <input value={cancelForm.reason} onChange={e => setCancelForm(f => ({ ...f, reason: e.target.value }))} className="input-base" placeholder="Why is this being cancelled?" />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Refund amount (₹)</label>
+                                  <input type="number" min="0" step="0.01" value={cancelForm.refund_amount} onChange={e => setCancelForm(f => ({ ...f, refund_amount: e.target.value }))} className="input-base num" placeholder="0" />
+                                </div>
+                                <div>
+                                  <label className="block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest">Refund mode</label>
+                                  <select value={cancelForm.refund_method} onChange={e => setCancelForm(f => ({ ...f, refund_method: e.target.value }))} className="input-base">
+                                    {REFUND_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              <p className="text-2xs text-ink-400">Leave the amount at 0 to cancel without a refund (e.g. a retained cancellation fee). The room is released back to availability automatically.</p>
+                            </div>
+                            <div className="flex gap-2 mt-5">
+                              <button onClick={() => setCancelTarget(null)} className="btn btn-outline flex-1">Keep booking</button>
+                              <button onClick={submitCancel} disabled={cancelling} className="btn flex-1" style={{ background: '#dc2626', color: '#fff' }}>
+                                {cancelling ? 'Cancelling…' : 'Cancel booking'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </motion.div>
@@ -676,9 +978,6 @@ export default function ReportsDashboard() {
                             </p>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <span className={`pill ${entry.guest.aadhaar_verified ? 'pill-success' : 'pill-amber'}`}>
-                              {entry.guest.aadhaar_verified ? 'KYC ✓' : 'KYC Pending'}
-                            </span>
                             {entry.frro_form_c_required && (
                               <span className="pill pill-danger">FRRO Form-C</span>
                             )}

@@ -82,9 +82,8 @@ export default function PrivacyPolicy() {
           </h1>
           <p className="text-ink-500 text-sm sm:text-base max-w-2xl">
             Effective <span className="font-medium text-ink-700">{EFFECTIVE_DATE}</span>. This policy explains what
-            personal information {PRODUCT} collects, why we collect it (including Aadhaar-linked data used for KYC),
-            how long we keep it, and how you can exercise your rights under the Digital Personal Data Protection
-            Act, 2023 (DPDP Act).
+            personal information {PRODUCT} collects, why we collect it, how long we keep it, and how you can exercise
+            your rights under the Digital Personal Data Protection Act, 2023 (DPDP Act).
           </p>
         </div>
       </section>
@@ -97,7 +96,7 @@ export default function PrivacyPolicy() {
           <ol className="text-sm text-teal-700 space-y-1.5">
             <li><a href="#who" className="hover:underline">1. Who we are</a></li>
             <li><a href="#what" className="hover:underline">2. What personal data we collect</a></li>
-            <li><a href="#aadhaar" className="hover:underline">3. Aadhaar &amp; KYC data - purpose and lawful basis</a></li>
+            <li><a href="#identity" className="hover:underline">3. Guest identity &amp; register</a></li>
             <li><a href="#how-use" className="hover:underline">4. How we use your data</a></li>
             <li><a href="#sharing" className="hover:underline">5. Who we share data with</a></li>
             <li><a href="#retention" className="hover:underline">6. Data retention policy</a></li>
@@ -127,7 +126,7 @@ export default function PrivacyPolicy() {
             items={[
               <><b>Account data</b> - full name, Indian mobile number, and email address. Email is required so we can send booking confirmations, room-access details and password-reset codes. We authenticate logins with a password, stored only as a salted bcrypt hash - never in plain text.</>,
               <><b>Profile data</b> - date of birth, gender, address, nationality (collected at the time of your first booking; optional until then).</>,
-              <><b>Aadhaar-linked KYC data</b> - see section&nbsp;3 below.</>,
+              <><b>Guest identity document</b> - a photo of a government ID (e.g. Aadhaar, passport or driving licence) captured by reception at check-in for the guest register; see section&nbsp;3 below.</>,
               <><b>Booking and stay data</b> - check-in / check-out dates, room and property selected, special requests, co-guest details, payment method.</>,
               <><b>Payment data</b> - we use Razorpay as our payment processor. Card and UPI details are submitted directly to Razorpay and are <i>not</i> stored on our servers. We only retain transaction identifiers and amounts.</>,
               <><b>Communication logs</b> - records of email messages we send you (delivery status, timestamps).</>,
@@ -136,34 +135,32 @@ export default function PrivacyPolicy() {
           />
         </Section>
 
-        <Section id="aadhaar" title="3. Aadhaar & KYC data - purpose and lawful basis">
+        <Section id="identity" title="3. Guest identity & register">
           <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 sm:p-5 mb-4">
             <p className="text-teal-900 font-medium">
-              Aadhaar verification is required only when you make your first booking. You can browse properties and
-              create an account without sharing Aadhaar information.
+              We do <b>not</b> run any online identity-verification (KYC) workflow, and we do not collect Aadhaar
+              numbers, DigiLocker data or selfies. You can browse properties, create an account and book without
+              uploading any identity document.
             </p>
           </div>
 
           <p>
-            When you complete a Know-Your-Customer (KYC) check on {PRODUCT}, we collect the following Aadhaar-linked
-            data from you or from your DigiLocker / Aadhaar offline XML, with your explicit consent at the time of
-            collection:
+            At check-in, reception records who is staying in the property to maintain the guest register, as required
+            by hospitality regulations and local police directives. For this purpose we may capture:
           </p>
           <Bullets
             items={[
-              'Your 12-digit Aadhaar number (stored masked, with only the last 4 digits visible to staff who have KYC permission).',
-              'Your name, date of birth, gender and address as printed on your Aadhaar.',
-              'A scan or photograph of your Aadhaar card (front and back) for visual verification.',
-              'A live selfie captured at the time of verification, used to confirm that the person submitting the document is the same as the person on the Aadhaar card (face match).',
+              'The type and number of a government photo ID you present (for example Aadhaar, passport or driving licence), and optionally a photograph of that ID document.',
+              'The names and basic details of co-guests staying with you.',
+              'For foreign nationals: passport and visa details, and (where applicable) Form-C details filed with the FRRO (Foreigners Regional Registration Office).',
             ]}
           />
 
           <p className="mt-3"><b>Why we collect this data:</b></p>
           <Bullets
             items={[
-              'To verify your identity before you can occupy a room, as required by hospitality regulations in India and by individual state / local police directives applicable to hotels and homestays.',
-              'To maintain the guest register and (where applicable) to file Form-C for foreign nationals with the FRRO (Foreigners Regional Registration Office) under the Registration of Foreigners Act, 1939.',
-              'To prevent fraud, identity theft and unauthorised bookings, and to comply with the Prevention of Money-Laundering Act (PMLA) where applicable.',
+              'To maintain the guest register required of hotels and homestays in India.',
+              'To file Form-C for foreign nationals with the FRRO under the Registration of Foreigners Act, 1939.',
               'To comply with directions from law enforcement agencies acting under lawful authority.',
             ]}
           />
@@ -171,17 +168,15 @@ export default function PrivacyPolicy() {
           <p className="mt-3"><b>Lawful basis:</b></p>
           <Bullets
             items={[
-              'Your explicit consent at the time of KYC submission (Section 6, DPDP Act, 2023).',
-              'Compliance with legal obligation under the Registration of Foreigners Act, 1939; Aadhaar (Targeted Delivery of Financial and Other Subsidies, Benefits and Services) Act, 2016 - particularly Section 8 for offline verification; and applicable state hospitality rules.',
+              'Compliance with legal obligation under the Registration of Foreigners Act, 1939 and applicable state hospitality / police rules.',
+              'Your consent when you provide an identity document at check-in (Section 6, DPDP Act, 2023).',
             ]}
           />
 
           <p className="mt-3">
-            We <b>do not</b> use Aadhaar data for any purpose other than identity verification, regulatory compliance,
-            and fraud prevention. We <b>do not</b> sell Aadhaar data, share it with advertisers, or use it for
-            profiling. The Aadhaar number itself is never shown to property owners or staff in full - they only see
-            a masked form (e.g. <code className="text-xs bg-ink-100 px-1.5 py-0.5 rounded">XXXX-XXXX-1234</code>) and
-            the verification status.
+            We <b>do not</b> use identity-document data for any purpose other than the guest register, regulatory
+            compliance and fraud prevention. We <b>do not</b> sell it, share it with advertisers, or use it for
+            profiling.
           </p>
         </Section>
 
@@ -189,10 +184,10 @@ export default function PrivacyPolicy() {
           <Bullets
             items={[
               'Create and authenticate your account (password login and email-based password recovery).',
-              'Process bookings and payments, and send you booking confirmations, smart-lock PINs and check-in details.',
-              'Verify your identity for stay regulations (see section 3).',
+              'Process bookings and payments, and send you booking confirmations, room-access details and check-in details.',
+              'Maintain the guest register for stay regulations (see section 3).',
               'Provide customer support, including responding to refund and dispute requests.',
-              'Send service-related notifications (booking reminders, KYC reminders, checkout reminders, review requests).',
+              'Send service-related notifications (booking reminders, checkout reminders, review requests).',
               'Detect and prevent fraud, abuse, and security incidents.',
               'Meet legal, tax, accounting and regulatory obligations.',
             ]}
@@ -206,8 +201,7 @@ export default function PrivacyPolicy() {
         <Section id="sharing" title="5. Who we share data with">
           <Bullets
             items={[
-              <><b>Property owners and authorised staff</b> who host your booking - they receive your name, contact details, booking dates, special requests, co-guest list and KYC status (verified / pending). They do <i>not</i> see your full Aadhaar number, Aadhaar image, or selfie.</>,
-              <><b>KYC service providers</b> (such as HyperVerge for OCR and face match, or Setu / DigiLocker for Aadhaar-based verification) - they process Aadhaar data on our behalf under signed data-processing agreements.</>,
+              <><b>Property owners and authorised staff</b> who host your booking - they receive your name, contact details, booking dates, special requests, co-guest list and any identity document you present at check-in for the guest register.</>,
               <><b>Payment processors</b> (Razorpay) - to charge and refund you.</>,
               <><b>Communication providers</b> (transactional email provider) - to deliver account, booking-related and password-recovery messages.</>,
               <><b>Law enforcement and regulatory authorities</b> - when we are required to do so under a lawful written request, court order, or statutory obligation (e.g. FRRO Form-C for foreign nationals; guest register inspection).</>,
@@ -220,9 +214,7 @@ export default function PrivacyPolicy() {
           <p>We do not keep your personal data for longer than we need to. Specific retention periods are:</p>
           <KV
             rows={[
-              ['Aadhaar number (masked)', '7 years after your last booking, to satisfy tax-record retention and police inspection obligations; deleted automatically after that.'],
-              ['Aadhaar image (front/back)', '180 days after the related booking checkout, OR until your KYC profile is re-verified - whichever is earlier. The image itself is deleted from our object storage; only the verification status and the masked number remain.'],
-              ['Live selfie used for face match', '90 days after the face-match decision; deleted automatically.'],
+              ['Guest ID document image', '180 days after the related booking checkout; deleted automatically from our object storage after that, subject to any longer period a local police directive requires.'],
               ['Booking and payment records', '8 years from the date of the transaction, to comply with the Income Tax Act and the Companies Act audit-trail requirements.'],
               ['Communication logs (email)', '24 months from the date of the message.'],
               ['Account profile (name, phone, email, address)', 'As long as your account is active. If you request deletion, we erase your profile within 30 days, subject to the booking and payment retention above.'],
@@ -240,9 +232,8 @@ export default function PrivacyPolicy() {
           <Bullets
             items={[
               'All data is stored in India (AWS Mumbai region) so that it stays within Indian jurisdiction in line with the DPDP Act.',
-              'Aadhaar images, selfies and other sensitive files are encrypted at rest using AES-256 and in transit over TLS 1.2+.',
-              'Aadhaar numbers are stored masked at the application layer; the unmasked form is only accessed by a limited subset of background services that perform regulatory reporting.',
-              'Access to KYC records is gated by per-employee permissions; every read or override of a KYC record is logged and visible to the organisation owner.',
+              'Guest ID images and other sensitive files are encrypted at rest using AES-256 and in transit over TLS 1.2+.',
+              'Access to guest-register records is gated by per-employee permissions; access is logged and visible to the organisation owner.',
               'We run regular security reviews of our code and infrastructure, and use bcrypt for any password hashing.',
             ]}
           />
@@ -259,7 +250,7 @@ export default function PrivacyPolicy() {
             items={[
               'Access a summary of the personal data we hold about you and the processing activities we carry out.',
               'Correct, complete, update or erase your personal data.',
-              'Withdraw a consent you previously gave us - including consent for Aadhaar KYC. Note: withdrawing KYC consent will stop you from making new bookings, but does not affect bookings already completed.',
+              'Withdraw a consent you previously gave us. Note: some records (such as the guest register) must be retained to meet legal obligations even after consent is withdrawn.',
               'Nominate another individual to exercise these rights on your behalf in the event of your death or incapacity.',
               'Lodge a grievance with our grievance officer (see section 12) and, if unresolved, escalate to the Data Protection Board of India.',
             ]}

@@ -45,9 +45,9 @@ export default function AdminAuth() {
   const code = codeDigits.join('');
 
   const routeByRole = (user) => {
-    if (user.role === 'global_admin') navigate('/global-admin');
-    else if (user.role === 'org_admin' || user.role === 'employee') navigate('/org-admin');
-    else navigate('/admin/dashboard');
+    if (user.role === 'global_admin') navigate('/global-admin', { replace: true });
+    else if (user.role === 'org_admin' || user.role === 'employee') navigate('/org-admin', { replace: true });
+    else navigate('/admin/dashboard', { replace: true });
   };
 
   const handleAdminLogin = async (e) => {
@@ -405,7 +405,7 @@ export default function AdminAuth() {
               </span>
             </h2>
             <p className="text-white/75 text-base leading-relaxed mb-10">
-              Bookings, KYC, housekeeping, payments, reports - all in one calm workspace built for the staff who actually run the floor.
+              Bookings, check-in, housekeeping, payments, reports - all in one calm workspace built for the staff who actually run the floor.
             </p>
 
             <ul className="space-y-4">

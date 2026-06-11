@@ -6,6 +6,10 @@ export const useAuthStore = create((set) => ({
   isAuthenticated: false,
   isInitializing: true,
   loading: false,
+  // True once a session has ended on its own (idle timeout or a token
+  // refresh that failed) rather than via an explicit sign-out. Drives the
+  // "session expired — sign in again" modal.
+  sessionExpired: false,
 
   setUser: (user) => set({ user }),
   setTokens: (tokens) => set({ tokens }),
@@ -19,7 +23,14 @@ export const useAuthStore = create((set) => ({
     isAuthenticated: true,
     isInitializing: false,
     loading: false,
+    sessionExpired: false,
   }),
+
+  // Flag a session as expired without tearing down `user` yet, so the
+  // modal can still greet the user by name. Only meaningful while signed in.
+  expireSession: () => set((state) => (
+    state.isAuthenticated ? { sessionExpired: true } : {}
+  )),
 
   logout: () => set({
     user: null,
@@ -27,6 +38,7 @@ export const useAuthStore = create((set) => ({
     isAuthenticated: false,
     isInitializing: false,
     loading: false,
+    sessionExpired: false,
   }),
 }));
 

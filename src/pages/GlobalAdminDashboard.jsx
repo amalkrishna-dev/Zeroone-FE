@@ -10,7 +10,7 @@ import LogoutConfirmModal from '../components/LogoutConfirmModal';
 import AdminShell from '../components/AdminShell';
 import { PlatformAlerts } from '../components/PlatformAlerts';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import {
@@ -27,7 +27,6 @@ const TAB_ICONS = {
   Bookings: FaCalendarAlt,
 };
 const SHELL_TABS = TABS.map(t => ({ id: t, label: t, icon: TAB_ICONS[t] }));
-const PIE_COLORS = ['#06b6d4', '#f59e0b', '#f97316'];
 
 const INPUT_CLS = 'input-base text-sm';
 const LABEL_CLS = 'block text-3xs font-bold text-ink-500 mb-1.5 uppercase tracking-widest';
@@ -260,12 +259,6 @@ export default function GlobalAdminDashboard() {
     </AdminShell>
   );
 
-  const kycData = dashboard ? [
-    { name: 'Verified', value: dashboard.kyc_breakdown?.verified || 0 },
-    { name: 'Pending', value: dashboard.kyc_breakdown?.pending || 0 },
-    { name: 'Not Submitted', value: dashboard.kyc_breakdown?.not_submitted || 0 },
-  ] : [];
-
   const userInitial = user?.name?.charAt(0).toUpperCase() || 'G';
 
   return (
@@ -317,7 +310,7 @@ export default function GlobalAdminDashboard() {
 
             <div className="grid md:grid-cols-2 gap-4 sm:gap-5">
               {/* Monthly booking volume */}
-              <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+              <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm md:col-span-2">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Bookings</p>
                 <p className="font-black text-gray-900 mb-5">Monthly Trend</p>
                 <ResponsiveContainer width="100%" height={180}>
@@ -329,30 +322,6 @@ export default function GlobalAdminDashboard() {
                     <Line type="monotone" dataKey="count" stroke="#f43f5e" strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: '#f43f5e' }} />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
-
-              {/* KYC status donut */}
-              <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Guests</p>
-                <p className="font-black text-gray-900 mb-5">KYC Verification</p>
-                <ResponsiveContainer width="100%" height={180}>
-                  <PieChart>
-                    <Pie data={kycData} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                      outerRadius={70} innerRadius={38} paddingAngle={3}>
-                      {kycData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ border: '1px solid #f3f4f6', borderRadius: '12px', fontSize: 12 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex justify-center gap-4 mt-2">
-                  {kycData.map((d, i) => (
-                    <div key={d.name} className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-full" style={{ background: PIE_COLORS[i] }} />
-                      <span className="text-xs text-gray-500 font-medium">{d.name}</span>
-                      <span className="text-xs font-bold text-gray-900">{d.value}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
 
               {/* Revenue per org */}

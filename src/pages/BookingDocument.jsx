@@ -50,7 +50,7 @@ export default function BookingDocument() {
 
   if (!data) return null;
 
-  const { booking, user, room, property, aadhaar } = data;
+  const { booking, user, room, property } = data;
   const checkIn = new Date(booking.check_in_date);
   const checkOut = new Date(booking.check_out_date);
   const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
@@ -271,43 +271,6 @@ export default function BookingDocument() {
               </div>
             </div>
           </section>
-
-          {/* Aadhaar */}
-          {aadhaar?.number && (
-            <section className="mb-5 rounded-2xl p-5 border border-ink-100 bg-white">
-              <h2 className="text-3xs font-bold text-ink-500 uppercase tracking-widest mb-3">Identity (Aadhaar)</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-ink-500">Aadhaar no</span>
-                    <span className="font-bold text-ink-900 font-mono">
-                      {aadhaar.number ? `${aadhaar.number.slice(0, 4)} ${aadhaar.number.slice(4, 8)} ${aadhaar.number.slice(8)}` : '-'}
-                    </span>
-                  </div>
-                  {aadhaar.name && <div className="flex justify-between"><span className="text-ink-500">Name</span><span className="font-bold text-ink-900">{aadhaar.name}</span></div>}
-                  {aadhaar.dob && <div className="flex justify-between"><span className="text-ink-500">DOB</span><span className="font-bold text-ink-900 num">{aadhaar.dob}</span></div>}
-                  {aadhaar.gender && <div className="flex justify-between"><span className="text-ink-500">Gender</span><span className="font-bold text-ink-900">{aadhaar.gender}</span></div>}
-                  {aadhaar.address && (
-                    <div>
-                      <span className="text-ink-500 text-xs">Address</span>
-                      <p className="font-semibold text-ink-900 text-xs mt-0.5">{aadhaar.address}</p>
-                    </div>
-                  )}
-                  <div className="flex justify-between pt-1">
-                    <span className="text-ink-500">Verification</span>
-                    <span className={`font-bold ${aadhaar.verified ? 'text-teal-700' : 'text-amber-600'}`}>
-                      {aadhaar.verified ? '✓ Verified' : '⏳ Pending'}
-                    </span>
-                  </div>
-                </div>
-                {aadhaar.image_url && (
-                  <div className="flex items-center justify-center">
-                    <img src={aadhaar.image_url} alt="Aadhaar" className="max-h-40 rounded-lg border border-ink-200 object-contain" />
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
 
           {/* Footer */}
           <footer className="mt-8 pt-6 border-t border-ink-100">

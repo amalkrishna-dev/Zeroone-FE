@@ -15,9 +15,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import {
   FaChartBar, FaUsers, FaCalendarAlt, FaBuilding, FaBars,
   FaPlus, FaTimes, FaSignOutAlt, FaEdit, FaTrash,
-  FaShieldAlt, FaCheckCircle, FaSearch, FaBed, FaThLarge,
-  FaBell, FaArrowUp, FaArrowDown, FaLock, FaWhatsapp, FaExclamationTriangle,
-  FaBroom, FaImage, FaCopy, FaCheck, FaCamera,
+  FaCheckCircle, FaSearch, FaBed, FaThLarge,
+  FaBell, FaArrowUp, FaArrowDown, FaLock, FaExclamationTriangle,
+  FaBroom, FaImage, FaExternalLinkAlt, FaCheck, FaCamera,
 } from 'react-icons/fa';
 
 const ALL_TABS = ['Dashboard', 'Rooms', 'Employees', 'Bookings', 'Properties', 'Housekeeping'];
@@ -30,33 +30,10 @@ const TAB_ICONS = {
   Housekeeping: FaBroom,
 };
 
-const PERM_LABELS = {
-  bookings_view: 'View Bookings',
-  bookings_edit: 'Edit Bookings',
-  kyc_view: 'View KYC Records',
-  kyc_override: 'KYC Manual Override',
-  calendar_view: 'View Calendar',
-  calendar_block: 'Block Dates',
-  property_view: 'View Properties',
-  property_edit: 'Edit Properties',
-  reports_download: 'Download Reports',
-  inspection_manage: 'Manage Inspections',
-  resend_access: 'Resend Guest Access',
-  finance_view: 'View Financials',
-  housekeeping_submit: 'Submit Housekeeping',
-  tasks_view: 'View Tasks',
-  tasks_claim: 'Claim Tasks',
-  tasks_complete: 'Complete Tasks',
-};
-
 const DEPARTMENTS = [
   {
     key: 'housekeeping', label: 'Housekeeping', icon: '🧹',
     summary: 'Cleans rooms after checkout, runs the housekeeping checklist, uploads completion photos.'
-  },
-  {
-    key: 'kyc_ops', label: 'KYC Operations', icon: '🪪',
-    summary: 'Reviews KYC submissions, approves/rejects, maintains verification records.'
   },
   {
     key: 'reception', label: 'Reception / Front Desk', icon: '🛎️',
@@ -150,7 +127,7 @@ export default function OrgAdminDashboard() {
     capacity: 2, max_occupancy: 2, smoking_allowed: false, accessibility: false,
     amenities: [], images: [],
     price_per_night: '', weekend_rate: '', ota_price: '',
-    late_checkout_charge_per_hour: '',
+    late_checkout_charge_per_hour: '', extra_guest_charge: '',
     aiosell_room_code: '',
     description: '',
   });
@@ -163,7 +140,6 @@ export default function OrgAdminDashboard() {
   const [housekeeping, setHousekeeping] = useState([]);
   const [housekeepingLoading, setHousekeepingLoading] = useState(false);
   const [clearingId, setClearingId] = useState(null);
-  const [copiedId, setCopiedId] = useState(null);
   const [viewingPhotos, setViewingPhotos] = useState(null);
 
   // Checklist config
@@ -283,12 +259,19 @@ export default function OrgAdminDashboard() {
     finally { setClearingId(null); }
   }
 
-  function copyHousekeepingLink(bookingId) {
+  async function markCleaned(bookingId) {
+    setClearingId(bookingId);
+    try {
+      await apiClient.post(`/housekeeping/mark-cleaned/${bookingId}`);
+      toast.success('Room marked as cleaned');
+      fetchHousekeeping();
+    } catch { toast.error('Failed to mark cleaned'); }
+    finally { setClearingId(null); }
+  }
+
+  function openHousekeepingLink(bookingId) {
     const url = `${window.location.origin}/housekeeping/${bookingId}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedId(bookingId);
-      setTimeout(() => setCopiedId(null), 2000);
-    });
+    window.open(url, '_blank', 'noopener');
   }
 
   async function openChecklistModal(prop) {
@@ -528,7 +511,7 @@ export default function OrgAdminDashboard() {
     capacity: 2, max_occupancy: 2, smoking_allowed: false, accessibility: false,
     amenities: [], images: [],
     price_per_night: '', weekend_rate: '', ota_price: '',
-    late_checkout_charge_per_hour: '',
+    late_checkout_charge_per_hour: '', extra_guest_charge: '',
     aiosell_room_code: '',
     description: '',
   };
@@ -566,6 +549,7 @@ export default function OrgAdminDashboard() {
       weekend_rate: room.weekend_rate || '',
       ota_price: room.ota_price || '',
       late_checkout_charge_per_hour: room.late_checkout_charge_per_hour ?? '',
+      extra_guest_charge: room.extra_guest_charge ?? '',
       aiosell_room_code: room.aiosell_room_code || '',
       description: room.description || '',
     });
@@ -614,6 +598,8 @@ export default function OrgAdminDashboard() {
         ota_price: roomForm.ota_price ? Number(roomForm.ota_price) : undefined,
         late_checkout_charge_per_hour: roomForm.late_checkout_charge_per_hour !== '' && roomForm.late_checkout_charge_per_hour != null
           ? Number(roomForm.late_checkout_charge_per_hour) : undefined,
+        extra_guest_charge: roomForm.extra_guest_charge !== '' && roomForm.extra_guest_charge != null
+          ? Number(roomForm.extra_guest_charge) : undefined,
         bed_count: Number(roomForm.bed_count) || 1,
         size_sqft: roomForm.size_sqft ? Number(roomForm.size_sqft) : undefined,
       });
@@ -660,6 +646,8 @@ export default function OrgAdminDashboard() {
         ota_price: roomForm.ota_price ? Number(roomForm.ota_price) : undefined,
         late_checkout_charge_per_hour: roomForm.late_checkout_charge_per_hour !== '' && roomForm.late_checkout_charge_per_hour != null
           ? Number(roomForm.late_checkout_charge_per_hour) : undefined,
+        extra_guest_charge: roomForm.extra_guest_charge !== '' && roomForm.extra_guest_charge != null
+          ? Number(roomForm.extra_guest_charge) : undefined,
         bed_count: Number(roomForm.bed_count) || 1,
         size_sqft: roomForm.size_sqft ? Number(roomForm.size_sqft) : undefined,
       });
@@ -901,10 +889,6 @@ export default function OrgAdminDashboard() {
                             </p>
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1 flex-shrink-0 ${b.kyc_completed ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
-                          <FaShieldAlt size={8} />
-                          {b.kyc_completed ? 'KYC ✓' : 'KYC Pending'}
-                        </span>
                       </div>
                     ))}
                   </div>
@@ -1048,8 +1032,7 @@ export default function OrgAdminDashboard() {
                       </div>
                     </div>
                   ) : [
-                    { Icon: FaLock, label: 'Smart Lock Alerts', count: alerts.counts?.lock || 0, items: alerts.lock_alerts || [] },
-                    { Icon: FaWhatsapp, label: 'WhatsApp & Communication Issues', count: alerts.counts?.communication || 0, items: alerts.communication_alerts || [] },
+                    { Icon: FaExclamationTriangle, label: 'OTA Sync', count: (alerts.alerts || []).length, items: alerts.alerts || [] },
                   ].map(({ Icon, label, count, items }) => (
                     <div key={label} className={`flex items-center gap-3 p-3 rounded-xl transition ${count > 0 ? 'bg-red-50 border border-red-100' : 'bg-emerald-50 border border-emerald-100'}`}>
                       <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${count > 0 ? 'bg-white border border-red-200' : 'bg-white border border-emerald-200'}`}>
@@ -1539,6 +1522,16 @@ export default function OrgAdminDashboard() {
                         </div>
                       </div>
 
+                      {/* Property images — small scrollable cards (full images shown to customers) */}
+                      {(prop.images || []).length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-1 px-1">
+                          {prop.images.map((url, i) => (
+                            <img key={i} src={url} alt={`${prop.name} ${i + 1}`} loading="lazy"
+                              className="h-16 w-24 flex-shrink-0 rounded-lg object-cover border border-gray-100 bg-gray-50" />
+                          ))}
+                        </div>
+                      )}
+
                       {/* Meta info chips */}
                       <div className="flex flex-wrap gap-2 mb-4">
                         <span className="bg-gray-50 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">
@@ -1658,6 +1651,11 @@ export default function OrgAdminDashboard() {
                         <p className="font-black text-gray-900">{prop.property_name}</p>
                       </div>
                       <div className="flex items-center gap-2 text-xs font-semibold flex-wrap">
+                        {prop.rooms.filter(r => r.status === 'cleaned').length > 0 && (
+                          <span className="bg-teal-50 text-teal-700 px-2.5 py-1 rounded-full">
+                            {prop.rooms.filter(r => r.status === 'cleaned').length} cleaned
+                          </span>
+                        )}
                         <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full">
                           {prop.rooms.filter(r => r.status === 'submitted').length} submitted
                         </span>
@@ -1679,6 +1677,7 @@ export default function OrgAdminDashboard() {
                         {prop.rooms.map(room => {
                           const isOverdue = room.status === 'pending' && (room.hours_since_checkout || 0) >= 2;
                           const statusCfg = {
+                            cleaned: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-100', label: 'Cleaned' },
                             submitted: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100', label: 'Submitted' },
                             pending: { bg: isOverdue ? 'bg-red-50' : 'bg-amber-50', text: isOverdue ? 'text-red-600' : 'text-amber-700', border: isOverdue ? 'border-red-100' : 'border-amber-100', label: isOverdue ? 'Overdue' : 'Pending' },
                             auto_cleared: { bg: 'bg-gray-100', text: 'text-gray-500', border: 'border-gray-200', label: 'Auto-cleared' },
@@ -1717,13 +1716,13 @@ export default function OrgAdminDashboard() {
                                     {statusCfg.label}
                                   </span>
 
-                                  {/* Copy link (only for pending) */}
+                                  {/* Open cleaner checklist link (only for pending) */}
                                   {room.status === 'pending' && (
-                                    <button onClick={() => copyHousekeepingLink(room.booking_id)}
-                                      title="Copy cleaner link"
+                                    <button onClick={() => openHousekeepingLink(room.booking_id)}
+                                      title="Open cleaner checklist in a new tab"
                                       className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 transition">
-                                      {copiedId === room.booking_id ? <FaCheck size={10} className="text-emerald-500" /> : <FaCopy size={10} />}
-                                      {copiedId === room.booking_id ? 'Copied!' : 'Copy Link'}
+                                      <FaExternalLinkAlt size={10} />
+                                      Open Link
                                     </button>
                                   )}
 
@@ -1744,6 +1743,18 @@ export default function OrgAdminDashboard() {
                                         ? <span className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                         : <FaBroom size={10} />}
                                       Auto-clear
+                                    </button>
+                                  )}
+
+                                  {/* Mark cleaned — completes the turnover lifecycle */}
+                                  {room.status !== 'cleaned' && (
+                                    <button onClick={() => markCleaned(room.booking_id)}
+                                      disabled={clearingId === room.booking_id}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-bold rounded-lg hover:bg-teal-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                                      {clearingId === room.booking_id
+                                        ? <span className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        : <FaCheck size={10} />}
+                                      Mark cleaned
                                     </button>
                                   )}
                                 </div>
@@ -1781,7 +1792,7 @@ export default function OrgAdminDashboard() {
         message="You'll need to sign in again to access the dashboard."
       />
 
-      {/* ── BOOKING MANAGEMENT (KYC + Checkout + PDF) ── */}
+      {/* ── BOOKING MANAGEMENT (Registration + Checkout + PDF) ── */}
       {manageBookingId && (
         <BookingManagementModal
           bookingId={manageBookingId}
@@ -1799,7 +1810,7 @@ export default function OrgAdminDashboard() {
             <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between z-10">
               <div>
                 <h3 className="font-black text-gray-900">Add Employee</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Set access permissions before creating</p>
+                <p className="text-xs text-gray-400 mt-0.5">Assign a department to set their access</p>
               </div>
               <button onClick={() => setShowEmpModal(false)} className="h-8 w-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition">
                 <FaTimes size={12} />
@@ -1824,43 +1835,30 @@ export default function OrgAdminDashboard() {
                 <p className="text-xs text-gray-400">Employee signs in at the staff portal with their email or phone and this password.</p>
               </div>
 
-              {/* Permissions */}
+              {/* Department */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="h-px flex-1 bg-gray-100" />
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Permissions</p>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Department</p>
                   <div className="h-px flex-1 bg-gray-100" />
                 </div>
-                <p className="text-xs text-gray-400 mb-3">All permissions are off by default. Only enable what this employee needs.</p>
-                <div className="space-y-1">
-                  {Object.entries(PERM_LABELS).map(([key, label]) => (
-                    <label key={key} className="flex items-center justify-between py-2.5 border-b border-gray-50 cursor-pointer group">
-                      <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition">{label}</span>
-                      <div
-                        className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${permForm[key] ? 'bg-rose-500' : 'bg-gray-200'}`}
-                        onClick={() => setPermForm(p => ({ ...p, [key]: !p[key] }))}>
-                        <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${permForm[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                      </div>
-                    </label>
-                  ))}
-                </div>
-
-                {/* Quick-select shortcuts */}
-                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-gray-50">
-                  <p className="w-full text-xs font-semibold text-gray-400 mb-1">Quick presets:</p>
-                  {[
-                    { label: 'Receptionist', perms: { bookings_view: true, bookings_edit: true, calendar_view: true, resend_access: true } },
-                    { label: 'Manager', perms: { bookings_view: true, bookings_edit: true, kyc_view: true, calendar_view: true, calendar_block: true, property_view: true, property_edit: true, reports_download: true } },
-                    { label: 'Housekeeping', perms: { calendar_view: true, inspection_manage: true } },
-                    { label: 'Accountant', perms: { bookings_view: true, reports_download: true } },
-                    { label: 'Clear all', perms: {} },
-                  ].map(({ label, perms }) => (
-                    <button key={label} type="button"
-                      onClick={() => setPermForm(perms)}
-                      className="text-xs font-semibold px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-rose-300 hover:text-rose-600 transition">
-                      {label}
-                    </button>
-                  ))}
+                <p className="text-xs text-gray-400 mb-3">The department determines which menu items and actions this employee can access.</p>
+                <div className="space-y-2">
+                  {DEPARTMENTS.map(d => {
+                    const selected = empForm.department === d.key;
+                    return (
+                      <button key={d.key} type="button"
+                        onClick={() => setEmpForm(p => ({ ...p, department: d.key }))}
+                        className={`w-full text-left flex items-start gap-3 p-3 rounded-xl border transition ${selected ? 'border-rose-300 bg-rose-50 ring-1 ring-rose-200' : 'border-gray-200 hover:border-rose-200 hover:bg-gray-50'}`}>
+                        <span className="text-xl leading-none flex-shrink-0">{d.icon}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-gray-900">{d.label}</span>
+                          <span className="block text-xs text-gray-500 mt-0.5">{d.summary}</span>
+                        </span>
+                        {selected && <FaCheck size={12} className="text-rose-500 mt-1 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1871,7 +1869,7 @@ export default function OrgAdminDashboard() {
                 Cancel
               </button>
               <button onClick={createEmployee}
-                disabled={!empForm.name || !empForm.phone || savingEmp}
+                disabled={!empForm.name || !empForm.phone || !empForm.department || savingEmp}
                 className="flex-1 bg-rose-500 text-white rounded-xl py-3 text-sm font-bold hover:bg-rose-600 transition shadow-sm shadow-rose-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 {savingEmp && <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 {savingEmp ? 'Creating…' : 'Create Employee'}
@@ -2211,14 +2209,16 @@ export default function OrgAdminDashboard() {
                 <SectionHead label="Policies" />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={LABEL_CLS}>Max Guests *</label>
+                    <label className={LABEL_CLS}>Included Guests *</label>
                     <input type="number" min="1" value={roomForm.capacity} onChange={e => setRoomForm(p => ({ ...p, capacity: e.target.value, max_occupancy: e.target.value }))}
                       className={INPUT_CLS} />
+                    <p className="text-[11px] text-gray-400 mt-1">Guests included in the base price.</p>
                   </div>
                   <div>
-                    <label className={LABEL_CLS}>Max Occupancy</label>
+                    <label className={LABEL_CLS}>Max Occupancy (cap)</label>
                     <input type="number" min="1" value={roomForm.max_occupancy} onChange={e => setRoomForm(p => ({ ...p, max_occupancy: e.target.value }))}
                       className={INPUT_CLS} />
+                    <p className="text-[11px] text-gray-400 mt-1">Most guests the room allows.</p>
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -2265,6 +2265,14 @@ export default function OrgAdminDashboard() {
                       onChange={e => setRoomForm(p => ({ ...p, late_checkout_charge_per_hour: e.target.value }))}
                       placeholder="Inherit from property" className={INPUT_CLS} />
                     <p className="text-[11px] text-gray-400 mt-1">Leave blank to use the property default.</p>
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Extra Guest (₹ / guest / night)</label>
+                    <input type="number" min="0" step="1"
+                      value={roomForm.extra_guest_charge ?? ''}
+                      onChange={e => setRoomForm(p => ({ ...p, extra_guest_charge: e.target.value }))}
+                      placeholder="0" className={INPUT_CLS} />
+                    <p className="text-[11px] text-gray-400 mt-1">Charged per guest above the included count.</p>
                   </div>
                 </div>
 
@@ -2339,7 +2347,7 @@ export default function OrgAdminDashboard() {
             <div className="sm:hidden flex justify-center pt-3 pb-1"><div className="h-1 w-10 bg-gray-200 rounded-full" /></div>
             <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
               <div>
-                <h3 className="font-black text-gray-900">Permissions</h3>
+                <h3 className="font-black text-gray-900">Edit Employee</h3>
                 <p className="text-xs text-gray-400 mt-0.5">{editEmpPerms.name}</p>
               </div>
               <button onClick={() => setEditEmpPerms(null)} className="h-8 w-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition">
@@ -2347,27 +2355,33 @@ export default function OrgAdminDashboard() {
               </button>
             </div>
             <div className="px-6 py-4">
-              <p className="text-xs text-gray-400 mb-4">All permissions are off by default. Enable only what this employee needs.</p>
-              <div className="space-y-1">
-                {Object.entries(PERM_LABELS).map(([key, label]) => (
-                  <label key={key} className="flex items-center justify-between py-3 border-b border-gray-50 cursor-pointer group">
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition">{label}</span>
-                    <div className={`relative w-10 h-5 rounded-full transition-colors ${permForm[key] ? 'bg-rose-500' : 'bg-gray-200'}`}
-                      onClick={() => setPermForm(p => ({ ...p, [key]: !p[key] }))}>
-                      <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${permForm[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                    </div>
-                  </label>
-                ))}
+              <p className="text-xs text-gray-400 mb-4">Change the department to update what this employee can access.</p>
+              <div className="space-y-2">
+                {DEPARTMENTS.map(d => {
+                  const selected = permForm.department === d.key;
+                  return (
+                    <button key={d.key} type="button"
+                      onClick={() => setPermForm(p => ({ ...p, department: d.key }))}
+                      className={`w-full text-left flex items-start gap-3 p-3 rounded-xl border transition ${selected ? 'border-rose-300 bg-rose-50 ring-1 ring-rose-200' : 'border-gray-200 hover:border-rose-200 hover:bg-gray-50'}`}>
+                      <span className="text-xl leading-none flex-shrink-0">{d.icon}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-gray-900">{d.label}</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">{d.summary}</span>
+                      </span>
+                      {selected && <FaCheck size={12} className="text-rose-500 mt-1 flex-shrink-0" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="flex gap-3 px-6 pb-6">
               <button onClick={() => setEditEmpPerms(null)}
                 className="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition">Cancel</button>
               <button onClick={updateEmployee}
-                disabled={savingPerms}
+                disabled={savingPerms || !permForm.department}
                 className="flex-1 bg-rose-500 text-white rounded-xl py-3 text-sm font-bold hover:bg-rose-600 transition shadow-sm shadow-rose-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 {savingPerms && <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                {savingPerms ? 'Saving…' : 'Save Permissions'}
+                {savingPerms ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>

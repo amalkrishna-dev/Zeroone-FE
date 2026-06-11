@@ -1,5 +1,16 @@
 import axios from 'axios';
-import { getAccessToken, getRefreshToken, setAccessToken, clearTokens } from './tokenStorage';
+import { getAccessToken, getRefreshToken, setAccessToken } from './tokenStorage';
+
+// Name of the window event fired when the session can no longer be kept
+// alive (no/expired refresh token). App-level <SessionGate> listens for it
+// and shows the "session expired" modal instead of a jarring redirect.
+export const SESSION_EXPIRED_EVENT = 'zeroone:session-expired';
+
+function notifySessionExpired() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
+}
 
 // REACT_APP_* values are baked in at build time. If REACT_APP_API_BASE_URL is
 // missing for a production build, we fall back to the same origin under /api
@@ -53,25 +64,30 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        // Nothing to refresh with — the session is over.
+        notifySessionExpired();
+        return Promise.reject(error);
+      }
+
       try {
-        const refreshToken = getRefreshToken();
-        if (refreshToken) {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
-            headers: {
-              Authorization: `Bearer ${refreshToken}`,
-            },
-          });
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+          headers: {
+            Authorization: `Bearer ${refreshToken}`,
+          },
+        });
 
-          const { access_token } = response.data.tokens;
-          setAccessToken(access_token);
+        const { access_token } = response.data.tokens;
+        setAccessToken(access_token);
 
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          return apiClient(originalRequest);
-        }
+        originalRequest.headers.Authorization = `Bearer ${access_token}`;
+        return apiClient(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, logout user
-        clearTokens();
-        window.location.href = '/login';
+        // Refresh failed (expired/invalid) — surface the session-expired
+        // modal rather than hard-redirecting mid-flow. <SessionGate> owns
+        // clearing tokens once the user acknowledges.
+        notifySessionExpired();
         return Promise.reject(refreshError);
       }
     }

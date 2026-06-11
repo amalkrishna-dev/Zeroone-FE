@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FaSync, FaWhatsapp, FaLock } from 'react-icons/fa';
+import { FaSync } from 'react-icons/fa';
 import apiClient from '../api/client';
 
 export function PlatformAlerts() {
@@ -29,22 +29,8 @@ export function PlatformAlerts() {
       icon: FaSync,
       title: 'OTA Sync Failures',
       color: 'red',
-      count: alerts.ota_failures_count || 0,
-      items: alerts.ota_failures || [],
-    },
-    {
-      icon: FaWhatsapp,
-      title: 'WhatsApp BSP Delivery Issues',
-      color: 'amber',
-      count: alerts.bsp_delivery_failures_count || 0,
-      items: alerts.bsp_delivery_failures || [],
-    },
-    {
-      icon: FaLock,
-      title: 'Smart Lock Failures',
-      color: 'rose',
-      count: alerts.lock_failures_count || 0,
-      items: alerts.lock_failures || [],
+      count: alerts.counts?.ota_dead || 0,
+      items: (alerts.banner_alerts || []).filter(a => a.type === 'ota_sync'),
     },
   ];
 

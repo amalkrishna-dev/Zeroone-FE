@@ -540,6 +540,21 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.14);
 }
 
+/* Icon-input padding. `.input-base` is defined after Tailwind's utilities,
+   so its `padding` shorthand out-orders single-class utilities like
+   `pl-10` and resets padding-left - which made a leading icon (e.g. the
+   lock on the password field) overlap the typed text. These compound
+   selectors (.input-base.pl-10 → specificity 0,2,0) re-assert the room
+   for the icon so it always wins, while plain inputs keep their 1rem gap.
+   Values mirror Tailwind's spacing scale. */
+.input-base.pl-8  { padding-left: 2rem; }
+.input-base.pl-9  { padding-left: 2.25rem; }
+.input-base.pl-10 { padding-left: 2.5rem; }
+.input-base.pl-11 { padding-left: 2.75rem; }
+.input-base.pr-10 { padding-right: 2.5rem; }
+.input-base.pr-11 { padding-right: 2.75rem; }
+.input-base.pr-12 { padding-right: 3rem; }
+
 /* iOS Safari zooms the page in when a focused input has a font-size below
    16px. Bump all text-entry controls to 16px on small screens so focusing
    a field (login, signup, booking checkout, etc.) never triggers a zoom. */

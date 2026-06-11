@@ -144,6 +144,18 @@ export default function Dashboard({ publicMode = false }) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const cancelBooking = useCallback(async (booking) => {
+    if (!window.confirm('Cancel this booking? If you paid online, a refund will be initiated.')) return;
+    try {
+      await apiClient.post(`/bookings/${booking.id}/cancel`, { reason: 'Cancelled by guest' });
+      toast.success('Booking cancelled');
+      const bookingsRes = await apiClient.get('/bookings');
+      setBookings(bookingsRes.data.data || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to cancel booking');
+    }
+  }, [setBookings]);
+
   const handleLogout = useCallback(() => {
     clearTokens();
     logout();
@@ -918,6 +930,18 @@ export default function Dashboard({ publicMode = false }) {
                         ))}
                       </div>
 
+                      {(booking.status === 'pending' || booking.status === 'confirmed')
+                        && !booking.checked_in_at && !booking.checked_out_at && (
+                        <div className="flex justify-end -mt-1 mb-2">
+                          <button
+                            onClick={e => { e.stopPropagation(); cancelBooking(booking); }}
+                            className="text-xs font-semibold text-red-500 hover:text-red-600 transition-colors"
+                          >
+                            Cancel booking
+                          </button>
+                        </div>
+                      )}
+
                       {booking.admin_status === 'password_set' && booking.room_password && (
                         <motion.div
                           initial={{ scale: 0.96, opacity: 0 }}
@@ -1300,6 +1324,16 @@ function BookingDetailModal({ booking, onClose }) {
               <span className="pill pill-ink">Pay at property</span>
             )}
           </div>
+
+          {booking.status === 'pending' && booking.payment_method === 'pay_at_property' && (
+            <div className="surface-soft p-4 border-l-4 border-amber-400 rounded-r-xl">
+              <p className="text-sm font-bold text-ink-900">Booking received</p>
+              <p className="text-xs text-ink-600 mt-0.5">
+                Your room is held. Pay at the property — your booking is confirmed once
+                the property collects payment.
+              </p>
+            </div>
+          )}
 
           {booking.admin_status === 'password_set' && booking.room_password && (
             <motion.div

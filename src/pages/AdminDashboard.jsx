@@ -399,17 +399,6 @@ export default function AdminDashboard() {
     } finally { setCreatingCoupon(false); }
   };
 
-  const handleVerifyAadhaar = async (userId) => {
-    try {
-      await apiClient.put(`/admin/users/${userId}/verify-aadhaar`);
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, aadhaar_verified: true } : u));
-      toast.success('Aadhaar verified successfully');
-    } catch (error) {
-      toast.error('Failed to verify Aadhaar');
-    }
-  };
-
-
   const handleDeleteCoupon = async (couponId) => {
     if (!window.confirm('Delete this coupon?')) return;
     try {
@@ -1012,20 +1001,6 @@ export default function AdminDashboard() {
                     <span className="text-xs text-gray-400 flex-shrink-0">{new Date(u.created_at).toLocaleDateString()}</span>
                   </div>
                   {u.email && <p className="text-xs text-gray-500 mb-2 truncate">{u.email}</p>}
-                  {u.aadhaar_number ? (
-                    <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-gray-700">{u.aadhaar_number}</span>
-                      {u.aadhaar_verified ? (
-                        <span className="text-green-600 font-bold text-[10px] flex items-center gap-1"><FaCheckCircle size={10} /> Verified</span>
-                      ) : (
-                        <button onClick={() => handleVerifyAadhaar(u.id)} className="text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg border border-blue-200">
-                          Verify
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-400 italic">No Aadhaar on file</span>
-                  )}
                 </div>
               ))}
             </div>
@@ -1034,7 +1009,7 @@ export default function AdminDashboard() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>{['Name', 'Email', 'Phone', 'ID Verified', 'Joined'].map(h => (
+                    <tr>{['Name', 'Email', 'Phone', 'Joined'].map(h => (
                       <th key={h} className="px-5 py-3 text-left font-semibold text-gray-600">{h}</th>
                     ))}</tr>
                   </thead>
@@ -1044,21 +1019,6 @@ export default function AdminDashboard() {
                         <td className="px-5 py-3.5 font-semibold text-gray-900">{u.name}</td>
                         <td className="px-5 py-3.5 text-gray-500">{u.email}</td>
                         <td className="px-5 py-3.5 text-gray-500">{u.phone}</td>
-                        <td className="px-5 py-3.5">
-                          {u.aadhaar_number ? (
-                            <div className="flex flex-col gap-1">
-                              <span className="font-mono text-xs font-bold text-gray-700">{u.aadhaar_number}</span>
-                              {u.aadhaar_verified ? (
-                                <span className="text-green-600 font-bold text-[10px] flex items-center gap-1 uppercase tracking-wider"><FaCheckCircle size={10} /> Verified</span>
-                              ) : (
-                                <button onClick={() => handleVerifyAadhaar(u.id)} className="text-[10px] font-bold text-blue-600 uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200">Verify Card</button>
-                              )}
-                              {u.aadhaar_image_url && (
-                                <a href={u.aadhaar_image_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-400 underline hover:text-gray-600">View Card Image</a>
-                              )}
-                            </div>
-                          ) : <span className="text-gray-400 text-xs italic">No Aadhaar</span>}
-                        </td>
                         <td className="px-5 py-3.5 text-gray-500">{new Date(u.created_at).toLocaleDateString()}</td>
                       </tr>
                     ))}
